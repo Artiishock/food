@@ -24,6 +24,10 @@ export default function GameControls({
 }: GameControlsProps) {
   const [showBuyMenu, setShowBuyMenu] = useState(false);
 
+  if (!gameState) {
+    return <div className="text-center p-4">Game loading...</div>;
+  }
+
   return (
     <div className="space-y-6">
       {/* Balance Display */}

@@ -11,7 +11,7 @@ import { GameEngine } from '../lib/gameEngine';
 
 export default function Home() {
   const gameEngine = useMemo(() => new GameEngine(), []);
-  const [gameState, setGameState] = useState(gameEngine.getState());
+  const [gameState, setGameState] = useState(() => gameEngine.getState());
   const [isSpinning, setIsSpinning] = useState(false);
   const [autoSpinActive, setAutoSpinActive] = useState(false);
 
@@ -48,6 +48,10 @@ export default function Home() {
     }
   };
 
+  if (!gameState) {
+    return <div className="text-center p-8">Loading...</div>;
+  }
+
   return (
     <GameLayout
       logo={<div className="text-4xl font-black italic tracking-tighter">FOOD SLOTS</div>}
@@ -62,9 +66,10 @@ export default function Home() {
       }
       betControls={
         <GameControls
-          state={gameState}
-          onSetBet={(bet) => gameEngine.setBet(bet)}
-          onSetAnte={(mode) => gameEngine.setAnteMode(mode)}
+          gameState={gameState}
+          onSpin={handleSpin}
+          onBetChange={(bet) => gameEngine.setBet(bet)}
+          onAnteChange={(mode) => gameEngine.setAnteMode(mode)}
           onBuyFreeSpins={(type) => gameEngine.buyFreeSpins(type)}
         />
       }
