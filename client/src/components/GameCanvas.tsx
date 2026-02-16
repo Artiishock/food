@@ -1,6 +1,6 @@
 /*
  * GameCanvas Component - PixiJS Rendering Engine
- * Smooth spinning reels + cascading win animations
+ * Vertical reel spinning + correct cascading animations
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -28,10 +28,17 @@ const SYMBOL_EMOJIS: Record<string, string> = {
   'wrap': '🌯',
 };
 
+interface ReelColumn {
+  container: PIXI.Container;
+  cells: PIXI.Container[];
+  velocity: number;
+}
+
 export default function GameCanvas({ gameEngine, isSpinning = false, onSpinComplete }: GameCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
-  const cellsRef = useRef<Map<string, { container: PIXI.Container; bg: PIXI.Graphics; emoji: PIXI.Text }>>(new Map());
+  const reelsRef = useRef<Map<number, ReelColumn>>(new Map());
+  const cellsRef = useRef<Map<string, PIXI.Container>>(new Map());
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,11 +112,18 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
       const cellWidth = 800 / symbolsConfig.gridSize.columns;
       const cellHeight = 500 / symbolsConfig.gridSize.rows;
 
-      // Create grid cells
-      for (let row = 0; row < symbolsConfig.gridSize.rows; row++) {
-        for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
+      // Create reels (columns)
+      for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
+        const reelContainer = new PIXI.Container();
+        reelContainer.position.set(col * cellWidth, 0);
+        reelContainer.mask = createMask(app, col * cellWidth, 0, cellWidth, 500);
+        
+        const cells: PIXI.Container[] = [];
+        
+        // Create cells for this reel
+        for (let row = 0; row < symbolsConfig.gridSize.rows; row++) {
           const cellContainer = new PIXI.Container();
-          cellContainer.position.set(col * cellWidth, row * cellHeight);
+          cellContainer.position.set(0, row * cellHeight);
           
           // Background
           const bg = new PIXI.Graphics();
@@ -130,9 +144,13 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           emojiText.position.set(cellWidth / 2, cellHeight / 2 - 8);
           cellContainer.addChild(emojiText);
           
-          app.stage.addChild(cellContainer);
-          cellsRef.current.set(`${row}-${col}`, { container: cellContainer, bg, emoji: emojiText });
+          reelContainer.addChild(cellContainer);
+          cells.push(cellContainer);
+          cellsRef.current.set(`${row}-${col}`, cellContainer);
         }
+        
+        app.stage.addChild(reelContainer);
+        reelsRef.current.set(col, { container: reelContainer, cells, velocity: 0 });
       }
 
     } catch (error) {
@@ -141,52 +159,77 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     }
   };
 
+  const createMask = (app: PIXI.Application, x: number, y: number, width: number, height: number): PIXI.Graphics => {
+    const mask = new PIXI.Graphics();
+    mask.rect(x, y, width, height);
+    mask.fill(0xffffff);
+    return mask;
+  };
+
   const updateGridDisplay = (app: PIXI.Application, grid: GridCell[][]) => {
+    const cellHeight = 500 / symbolsConfig.gridSize.rows;
+
     for (let row = 0; row < grid.length; row++) {
       for (let col = 0; col < grid[row].length; col++) {
         const cell = grid[row][col];
         const key = `${row}-${col}`;
-        const cellData = cellsRef.current.get(key);
+        const cellContainer = cellsRef.current.get(key);
 
-        if (cellData && cell) {
+        if (cellContainer && cell) {
           const emoji = SYMBOL_EMOJIS[cell.symbol.id] || '❓';
-          cellData.emoji.text = emoji;
-          cellData.bg.clear();
-          cellData.bg.rect(1, 1, 800 / symbolsConfig.gridSize.columns - 2, 500 / symbolsConfig.gridSize.rows - 2);
-          cellData.bg.fill(0xffffff);
-          cellData.bg.stroke({ width: 1, color: 0xcccccc });
+          const emojiText = cellContainer.children[1] as PIXI.Text;
+          if (emojiText) {
+            emojiText.text = emoji;
+          }
+          
+          // Reset position
+          cellContainer.position.y = row * cellHeight;
+          cellContainer.alpha = 1;
         }
       }
     }
   };
 
   const performSpinAnimation = async (app: PIXI.Application, grid: GridCell[][]) => {
-    const cellWidth = 800 / symbolsConfig.gridSize.columns;
     const cellHeight = 500 / symbolsConfig.gridSize.rows;
     const spinDuration = 2000;
 
     return new Promise<void>((resolve) => {
       const startTime = Date.now();
+      const reels = Array.from(reelsRef.current.values());
 
       const spinTicker = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / spinDuration, 1);
 
-        // Smooth spinning animation for all cells
-        cellsRef.current.forEach((cellData) => {
-          cellData.container.rotation = progress * Math.PI * 6;
-          cellData.container.alpha = 0.6 + progress * 0.4;
-          cellData.container.scale.set(0.8 + progress * 0.2);
+        // Vertical spinning for each reel
+        reels.forEach((reel, colIndex) => {
+          const staggerDelay = colIndex * 100; // Stagger effect
+          const adjustedProgress = Math.max(0, progress - staggerDelay / spinDuration);
+          
+          if (adjustedProgress > 0) {
+            // Smooth easing for deceleration
+            const easeProgress = adjustedProgress < 0.7 
+              ? adjustedProgress / 0.7 
+              : 0.7 + (adjustedProgress - 0.7) * 0.3;
+            
+            reel.velocity = 30 * (1 - easeProgress);
+            reel.container.y += reel.velocity;
+
+            // Wrap around for infinite scroll effect
+            if (reel.container.y > cellHeight * symbolsConfig.gridSize.rows) {
+              reel.container.y -= cellHeight * symbolsConfig.gridSize.rows;
+            }
+          }
         });
 
         if (progress >= 1) {
           app.ticker.remove(spinTicker as any);
           
-          // Reset animation properties
-          cellsRef.current.forEach((cellData) => {
-            cellData.container.rotation = 0;
-            cellData.container.alpha = 1;
-            cellData.container.scale.set(1);
+          // Reset reel positions
+          reels.forEach((reel) => {
+            reel.container.y = 0;
+            reel.velocity = 0;
           });
 
           // Update grid display
@@ -216,7 +259,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
       await performExplosion(app, step.wins);
       
       // Drop animation
-      await performDrop(app);
+      await performDrop(app, step.wins);
       
       // Update grid
       updateGridDisplay(app, step.newGrid);
@@ -225,7 +268,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
   const performExplosion = async (app: PIXI.Application, wins: any[]): Promise<void> => {
     return new Promise<void>((resolve) => {
-      const explosionDuration = 600;
+      const explosionDuration = 400;
       const startTime = Date.now();
 
       const explosionTicker = () => {
@@ -236,15 +279,19 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         wins.forEach((win: any) => {
           win.cells.forEach((cell: GridCell) => {
             const key = `${cell.row}-${cell.col}`;
-            const cellData = cellsRef.current.get(key);
-            if (cellData) {
-              cellData.bg.clear();
-              cellData.bg.rect(1, 1, 800 / symbolsConfig.gridSize.columns - 2, 500 / symbolsConfig.gridSize.rows - 2);
-              cellData.bg.fill(0xff6b6b); // Red for explosion
-              cellData.bg.stroke({ width: 2, color: 0xff0000 });
+            const cellContainer = cellsRef.current.get(key);
+            if (cellContainer && cellContainer.children[0]) {
+              const bg = cellContainer.children[0] as PIXI.Graphics;
+              bg.clear();
+              bg.rect(1, 1, 800 / symbolsConfig.gridSize.columns - 2, 500 / symbolsConfig.gridSize.rows - 2);
+              bg.fill(0xff6b6b); // Red for explosion
+              bg.stroke({ width: 2, color: 0xff0000 });
               
-              cellData.container.scale.set(1 + progress * 0.3);
-              cellData.emoji.alpha = 1 - progress;
+              cellContainer.scale.set(1 + progress * 0.2);
+              
+              if (cellContainer.children[1]) {
+                (cellContainer.children[1] as PIXI.Text).alpha = 1 - progress;
+              }
             }
           });
         });
@@ -252,14 +299,13 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         if (progress >= 1) {
           app.ticker.remove(explosionTicker as any);
           
-          // Clear explosion effect
+          // Clear explosion effect and remove cells
           wins.forEach((win: any) => {
             win.cells.forEach((cell: GridCell) => {
               const key = `${cell.row}-${cell.col}`;
-              const cellData = cellsRef.current.get(key);
-              if (cellData) {
-                cellData.container.scale.set(1);
-                cellData.emoji.alpha = 1;
+              const cellContainer = cellsRef.current.get(key);
+              if (cellContainer) {
+                cellContainer.visible = false; // Hide instead of removing
               }
             });
           });
@@ -272,18 +318,44 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     });
   };
 
-  const performDrop = async (app: PIXI.Application): Promise<void> => {
+  const performDrop = async (app: PIXI.Application, wins: any[]): Promise<void> => {
     return new Promise<void>((resolve) => {
-      const dropDuration = 400;
+      const dropDuration = 500;
       const startTime = Date.now();
+      const cellHeight = 500 / symbolsConfig.gridSize.rows;
+
+      // Identify cells that need to drop
+      const affectedCols = new Set<number>();
+      wins.forEach((win: any) => {
+        win.cells.forEach((cell: GridCell) => {
+          affectedCols.add(cell.col);
+        });
+      });
 
       const dropTicker = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / dropDuration, 1);
+        const dropDistance = cellHeight * progress;
 
-        // Simulate drop with scale and position changes
-        cellsRef.current.forEach((cellData) => {
-          cellData.container.y += progress * 5;
+        // Move cells down in affected columns
+        cellsRef.current.forEach((cellContainer, key) => {
+          const [row, col] = key.split('-').map(Number);
+          
+          if (affectedCols.has(col) && cellContainer.visible) {
+            // Check if this cell is above any explosion
+            let shouldDrop = false;
+            wins.forEach((win: any) => {
+              win.cells.forEach((cell: GridCell) => {
+                if (cell.col === col && row < cell.row) {
+                  shouldDrop = true;
+                }
+              });
+            });
+
+            if (shouldDrop) {
+              cellContainer.position.y = row * cellHeight + dropDistance;
+            }
+          }
         });
 
         if (progress >= 1) {
