@@ -19,7 +19,7 @@ const SYMBOL_EMOJIS: Record<string, string> = {
   'burger': '🍔',
   'drink': '🥤',
   'pie': '🥧',
-  'order': '📋',
+  'scatter': '📋',
   'pizza': '🍕',
   'taco': '🌮',
   'fries': '🍟',
@@ -29,16 +29,12 @@ const SYMBOL_EMOJIS: Record<string, string> = {
   'wrap': '🌯',
 };
 
-const SYMBOL_NAMES = ['burger', 'drink', 'pie', 'order', 'pizza', 'taco', 'fries', 'burrito', 'hotdog', 'chicken', 'wrap'];
-
-const ICON_SIZE = 128;
-const ICON_COLS = 3;
-const ICON_ROWS = 4;
+const SYMBOL_NAMES = ['burger', 'drink', 'pie', 'scatter', 'pizza', 'taco', 'fries', 'burrito', 'hotdog', 'chicken', 'wrap'];
 
 export default function GameCanvas({ gameEngine, isSpinning = false, onSpinComplete }: GameCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
-  const columnsRef = useRef<Map<number, { container: PIXI.Container; sprites: PIXI.Sprite[]; velocity: number }>>(new Map());
+  const columnsRef = useRef<Map<number, { container: PIXI.Container; sprites: PIXI.Container[]; velocity: number; stopRequested: boolean; finalY: number | null }>>(new Map());
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -83,55 +79,69 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     const columns = Array.from(columnsRef.current.values());
     if (columns.length === 0) return;
 
-    // Calculate cell height based on grid (500px / 5 rows = 100px per cell)
     const cellHeight = 100;
 
     // Start spinning all columns
     columns.forEach((col, colIndex) => {
-      col.velocity = 15 + Math.random() * 5; // Random spin speed
+      col.velocity = 25 + Math.random() * 10;
+      col.stopRequested = false;
+      col.finalY = null;
     });
 
-    // Stop spinning after duration
-    const spinDuration = 2000;
-    const stopTime = Date.now() + spinDuration;
+    const startTime = Date.now();
+    const spinDuration = 1000; 
 
     const spinTicker = () => {
       const now = Date.now();
-      const timeRemaining = Math.max(0, stopTime - now);
-      const progress = 1 - timeRemaining / spinDuration;
+      const elapsed = now - startTime;
+      
+      let allStopped = true;
 
-      columns.forEach((col) => {
-        if (progress < 0.7) {
-          // Full speed spinning
-          col.container.y += col.velocity;
-        } else {
-          // Deceleration phase
-          const decelProgress = (progress - 0.7) / 0.3;
-          col.velocity *= (1 - decelProgress * 0.05);
-          col.container.y += col.velocity;
+      columns.forEach((col, colIndex) => {
+        const reelStopTime = spinDuration + colIndex * 300;
+        
+        if (elapsed > reelStopTime && !col.stopRequested) {
+          col.stopRequested = true;
+          // Calculate where we should stop
+          col.finalY = Math.round(col.container.y / cellHeight) * cellHeight;
         }
 
-        // Wrap around - keep within visible area
-        const totalHeight = col.sprites.length * cellHeight;
-        while (col.container.y > cellHeight) {
-          col.container.y -= totalHeight;
-        }
-        while (col.container.y < -totalHeight + cellHeight) {
-          col.container.y += totalHeight;
+        if (col.velocity > 0 || (col.finalY !== null && Math.abs(col.container.y - col.finalY) > 0.5)) {
+          allStopped = false;
+          
+          if (col.stopRequested && col.finalY !== null) {
+            const diff = col.finalY - col.container.y;
+            
+            // Decelerate
+            col.velocity *= 0.92;
+            
+            // If very slow, snap to final position
+            if (col.velocity < 2 && Math.abs(diff) < 20) {
+              col.container.y = col.finalY;
+              col.velocity = 0;
+            } else {
+              col.container.y += col.velocity;
+              // Apply a corrective force to align with finalY
+              col.container.y += diff * 0.1;
+            }
+          } else {
+            col.container.y += col.velocity;
+          }
+
+          // Wrap around logic - Keep the container within a small range to avoid overflow
+          // The visible area is 50 to 550.
+          if (col.container.y > 150) {
+            col.container.y -= cellHeight;
+            if (col.finalY !== null) col.finalY -= cellHeight;
+          } else if (col.container.y < -50) {
+            col.container.y += cellHeight;
+            if (col.finalY !== null) col.finalY += cellHeight;
+          }
         }
       });
 
-      if (timeRemaining === 0) {
+      if (allStopped) {
         app.ticker.remove(spinTicker as any);
-        
-        // Snap to grid positions - align to exact grid positions
-        columns.forEach((col) => {
-          // Round to nearest grid position
-          const snappedY = Math.round(col.container.y / cellHeight) * cellHeight;
-          col.container.y = snappedY;
-          col.velocity = 0;
-        });
-
         onSpinComplete?.({});
       }
     };
@@ -141,40 +151,40 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
   const initializeGame = async (app: PIXI.Application) => {
     try {
-      // Create board background
       const boardBg = new PIXI.Graphics();
       boardBg.rect(50, 50, 800, 500);
       boardBg.fill(0x2a2a2a);
       boardBg.stroke({ width: 10, color: 0x000000 });
       app.stage.addChild(boardBg);
 
-      // Create columns with spinning animation
+      const mask = new PIXI.Graphics();
+      mask.rect(50, 50, 800, 500);
+      mask.fill(0xffffff);
+      app.stage.addChild(mask);
+
       const cellWidth = 800 / symbolsConfig.gridSize.columns;
-      const cellHeight = 500 / symbolsConfig.gridSize.rows; // 100px per cell
+      const cellHeight = 100;
 
       for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
         const container = new PIXI.Container();
         container.x = 50 + col * cellWidth + cellWidth / 2;
-        container.y = 50; // Start at top of visible area
+        container.y = 50;
+        container.mask = mask;
         
-        const sprites: PIXI.Sprite[] = [];
+        const sprites: PIXI.Container[] = [];
 
-        // Create multiple cells for each symbol position (5 rows visible)
-        // We create extra rows above and below for smooth wrapping
-        // Total: 2 above + 5 visible + 2 below = 9 cells for smooth animation
-        for (let i = 0; i < 9; i++) {
+        // Create 11 cells (5 visible + 3 above + 3 below) for smooth wrapping
+        for (let i = -3; i < 8; i++) {
           const cellContainer = new PIXI.Container();
           cellContainer.position.set(0, i * cellHeight);
           
-          // Cell background
           const bg = new PIXI.Graphics();
           bg.rect(-cellWidth / 2 + 5, -cellHeight / 2 + 5, cellWidth - 10, cellHeight - 10);
           bg.fill(0xffffff);
           bg.stroke({ width: 3, color: 0x000000 });
           cellContainer.addChild(bg);
           
-          // Add emoji icon - properly centered
-          const symbolName = SYMBOL_NAMES[i % SYMBOL_NAMES.length];
+          const symbolName = SYMBOL_NAMES[Math.abs(i) % SYMBOL_NAMES.length];
           const emoji = SYMBOL_EMOJIS[symbolName] || '❓';
           const emojiText = new PIXI.Text({
             text: emoji,
@@ -187,7 +197,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           emojiText.position.set(0, -12);
           cellContainer.addChild(emojiText);
           
-          // Add symbol name label
           const nameText = new PIXI.Text({
             text: symbolName.substring(0, 3).toUpperCase(),
             style: {
@@ -203,31 +212,24 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           cellContainer.addChild(nameText);
           
           container.addChild(cellContainer);
-          sprites.push(cellContainer as any);
+          sprites.push(cellContainer);
         }
 
-        // Set container to clip children at visible area
-        container.cullable = true;
-
         app.stage.addChild(container);
-        columnsRef.current.set(col, { container, sprites, velocity: 0 });
+        columnsRef.current.set(col, { container, sprites, velocity: 0, stopRequested: false, finalY: null });
       }
 
-      // Draw grid lines
       const gridLines = new PIXI.Graphics();
-      
       for (let i = 0; i <= symbolsConfig.gridSize.columns; i++) {
         const x = 50 + i * cellWidth;
         gridLines.moveTo(x, 50);
         gridLines.lineTo(x, 550);
       }
-      
       for (let i = 0; i <= symbolsConfig.gridSize.rows; i++) {
         const y = 50 + i * cellHeight;
         gridLines.moveTo(50, y);
         gridLines.lineTo(850, y);
       }
-      
       gridLines.stroke({ width: 2, color: 0x444444 });
       app.stage.addChild(gridLines);
 
