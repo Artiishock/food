@@ -1,0 +1,52 @@
+{
+  "orders": {
+    "normalMode": {
+      "chance": 0.15,
+      "minQuantity": 8,
+      "maxQuantity": 15,
+      "tipMultipliers": [2, 3, 5, 10, 25, 50]
+    },
+    "freeSpinsMode": {
+      "minOrders": 3,
+      "maxOrders": 6,
+      "minQuantity": 10,
+      "maxQuantity": 20,
+      "superBonusMultiplier": 100
+    }
+  },
+  "anteMode": {
+    "lowAnteMultiplier": 1.25,
+    "lowAnteOrderChance": 0.25,
+    "lowAnteScatterBoost": 1.5,
+    "highAnteMultiplier": 5,
+    "highAnteOrderChance": 1.0,
+    "highAnteScatterBoost": 2.0
+  },
+  "freeSpins": {
+    "scatterTrigger": 3,
+    "spinsAwarded": 10,
+    "cheapPackage": {
+      "cost": 50,
+      "spins": 5,
+      "tipMultipliers": [2, 3, 5, 10, 20],
+      "maxOrders": 3
+    },
+    "standardPackage": {
+      "cost": 100,
+      "spins": 10,
+      "tipMultipliers": [2, 3, 5, 10, 25, 50, 100],
+      "maxOrders": 6
+    }
+  },
+  "betting": {
+    "minBet": 1,
+    "maxBet": 100,
+    "defaultBet": 10
+  },
+  "animations": {
+    "spinDuration": 2000,
+    "cascadeDuration": 500,
+    "explosionDuration": 800,
+    "symbolDropSpeed": 1200
+  }
+}
