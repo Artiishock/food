@@ -27,6 +27,7 @@ export default function Home() {
     try {
       setIsSpinning(true);
       await gameEngine.spin();
+      setGameState(gameEngine.getState());
     } catch (error) {
       console.error(error);
       setAutoSpinActive(false);
@@ -36,6 +37,7 @@ export default function Home() {
 
   const handleSpinComplete = () => {
     setIsSpinning(false);
+    setGameState(gameEngine.getState());
     if (autoSpinActive) {
       setTimeout(handleSpin, 1000);
     }
@@ -73,12 +75,16 @@ export default function Home() {
           onBuyFreeSpins={(type) => gameEngine.buyFreeSpins(type)}
         />
       }
-    >
-      <GameCanvas
-        gameEngine={gameEngine}
-        isSpinning={isSpinning}
-        onSpinComplete={handleSpinComplete}
-      />
-    </GameLayout>
+      gameBoard={
+        <GameCanvas
+          gameEngine={gameEngine}
+          isSpinning={isSpinning}
+          onSpinComplete={handleSpinComplete}
+        />
+      }
+      settings={<SettingsPanel />}
+      balance={<div className="text-mono text-sm">Balance: ${gameState.balance.toFixed(2)}</div>}
+      bonuses={<BonusesPanel />}
+    />
   );
 }

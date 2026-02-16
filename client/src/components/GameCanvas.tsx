@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
-import { GameEngine, GridCell } from '../lib/gameEngine';
+import { GameEngine } from '../lib/gameEngine';
 import symbolsConfig from '../config/symbols.json';
 
 interface GameCanvasProps {
@@ -14,7 +14,7 @@ interface GameCanvasProps {
   onSpinComplete?: (result: any) => void;
 }
 
-// Symbol emoji mapping - all 11 symbols
+// Symbol emoji mapping
 const SYMBOL_EMOJIS: Record<string, string> = {
   'burger': '🍔',
   'drink': '🥤',
@@ -36,6 +36,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
   const appRef = useRef<PIXI.Application | null>(null);
   const columnsRef = useRef<Map<number, { container: PIXI.Container; sprites: PIXI.Container[]; velocity: number; stopRequested: boolean; finalY: number | null }>>(new Map());
   const [isReady, setIsReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -43,18 +44,26 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     let mounted = true;
 
     const initApp = async () => {
-      const app = new PIXI.Application();
-      await app.init({
-        width: 900,
-        height: 600,
-        backgroundColor: 0x000000,
-      });
+      try {
+        const app = new PIXI.Application();
+        await app.init({
+          width: 900,
+          height: 600,
+          backgroundColor: 0x000000,
+          antialias: true,
+        });
 
-      if (canvasRef.current && mounted) {
-        canvasRef.current.appendChild(app.canvas as HTMLCanvasElement);
-        appRef.current = app;
-        await initializeGame(app);
-        setIsReady(true);
+        if (canvasRef.current && mounted) {
+          canvasRef.current.innerHTML = '';
+          canvasRef.current.appendChild(app.canvas as HTMLCanvasElement);
+          appRef.current = app;
+          await initializeGame(app);
+          setIsReady(true);
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Failed to initialize PixiJS:', err);
+        setError(`Failed to initialize game: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
 
@@ -63,33 +72,35 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     return () => {
       mounted = false;
       if (appRef.current) {
-        appRef.current.destroy();
-        appRef.current = null;
+        try {
+          appRef.current.destroy();
+          appRef.current = null;
+        } catch (e) {
+          console.error('Error destroying app:', e);
+        }
       }
     };
   }, []);
 
   // Handle spinning animation
   useEffect(() => {
-    if (!isSpinning) return;
+    if (!isSpinning || !appRef.current) return;
 
     const app = appRef.current;
-    if (!app) return;
-
     const columns = Array.from(columnsRef.current.values());
     if (columns.length === 0) return;
 
     const cellHeight = 100;
 
     // Start spinning all columns
-    columns.forEach((col, colIndex) => {
+    columns.forEach((col) => {
       col.velocity = 25 + Math.random() * 10;
       col.stopRequested = false;
       col.finalY = null;
     });
 
     const startTime = Date.now();
-    const spinDuration = 1000; 
+    const spinDuration = 1000;
 
     const spinTicker = () => {
       const now = Date.now();
@@ -102,7 +113,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         
         if (elapsed > reelStopTime && !col.stopRequested) {
           col.stopRequested = true;
-          // Calculate where we should stop
           col.finalY = Math.round(col.container.y / cellHeight) * cellHeight;
         }
 
@@ -112,24 +122,19 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           if (col.stopRequested && col.finalY !== null) {
             const diff = col.finalY - col.container.y;
             
-            // Decelerate
             col.velocity *= 0.92;
             
-            // If very slow, snap to final position
             if (col.velocity < 2 && Math.abs(diff) < 20) {
               col.container.y = col.finalY;
               col.velocity = 0;
             } else {
               col.container.y += col.velocity;
-              // Apply a corrective force to align with finalY
               col.container.y += diff * 0.1;
             }
           } else {
             col.container.y += col.velocity;
           }
 
-          // Wrap around logic - Keep the container within a small range to avoid overflow
-          // The visible area is 50 to 550.
           if (col.container.y > 150) {
             col.container.y -= cellHeight;
             if (col.finalY !== null) col.finalY -= cellHeight;
@@ -173,7 +178,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         
         const sprites: PIXI.Container[] = [];
 
-        // Create 11 cells (5 visible + 3 above + 3 below) for smooth wrapping
         for (let i = -3; i < 8; i++) {
           const cellContainer = new PIXI.Container();
           cellContainer.position.set(0, i * cellHeight);
@@ -235,14 +239,29 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
     } catch (error) {
       console.error('Failed to initialize game:', error);
+      throw error;
     }
   };
+
+  if (error) {
+    return (
+      <div 
+        className="flex justify-center items-center bg-red-900 text-white p-4 rounded"
+        style={{ width: '900px', height: '600px' }}
+      >
+        <div className="text-center">
+          <div className="text-xl font-bold mb-2">Error Loading Game</div>
+          <div className="text-sm">{error}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
       ref={canvasRef} 
-      className="flex justify-center items-center"
-      style={{ width: '100%', height: '600px' }}
+      className="flex justify-center items-center bg-gray-900"
+      style={{ width: '900px', height: '600px' }}
     />
   );
 }
