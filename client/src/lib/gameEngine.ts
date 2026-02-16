@@ -118,7 +118,6 @@ export class GameEngine {
   public async spin(): Promise<{ wins: any[], cascades: number, totalWin: number }> {
     if (this.state.isSpinning) return { wins: [], cascades: 0, totalWin: 0 };
     
-    // Deduct bet
     let betAmount = this.state.currentBet;
     if (this.state.anteMode === 'low') {
       betAmount *= gameConfig.anteMode.lowAnteMultiplier;
@@ -135,32 +134,23 @@ export class GameEngine {
     this.state.totalWin = 0;
     this.state.cascadeSteps = [];
 
-    // Clear orders if not in free spins mode
     if (!this.state.isFreeSpins) {
       this.state.orders = [];
     }
 
-    // Generate order (if applicable) before grid generation
     this.generateOrder();
-    
-    // Generate new grid
     this.state.grid = this.generateInitialGrid();
     
-    // Process cascades
     const result = await this.processCascades();
     
-    // Check for free spins trigger
     this.checkFreeSpinsTrigger();
     
-    // Update balance with wins
     this.state.balance += result.totalWin;
     this.state.totalWin = result.totalWin;
     this.state.isSpinning = false;
     
-    // Check if orders completed (and clear if normal mode)
     this.checkOrderCompletion();
     
-    // Decrement free spins if in free spins mode
     if (this.state.isFreeSpins && this.state.freeSpinsRemaining > 0) {
       this.state.freeSpinsRemaining--;
       if (this.state.freeSpinsRemaining === 0) {
@@ -211,7 +201,6 @@ export class GameEngine {
     const allWins: any[] = [];
     
     while (true) {
-      // Find winning combinations
       const wins = this.findWinningCombinations();
       
       if (wins.length === 0) break;
@@ -228,7 +217,6 @@ export class GameEngine {
         totalWin += payout * this.state.currentBet;
         allWins.push({ ...win, payout });
         
-        // Update order progress
         this.updateOrderProgress(win.symbol.id, win.count);
       }
       
@@ -238,7 +226,7 @@ export class GameEngine {
       // Drop symbols down
       this.dropSymbols();
       
-      // Fill empty spaces
+      // Fill empty spaces with new symbols
       this.fillEmptySpaces();
     }
     
@@ -253,7 +241,7 @@ export class GameEngine {
     const wins: { symbol: Symbol, cells: GridCell[], count: number }[] = [];
     const symbolGroups = new Map<string, GridCell[]>();
     
-    // Group symbols
+    // Group all symbols by type
     for (let row = 0; row < this.state.grid.length; row++) {
       for (let col = 0; col < this.state.grid[row].length; col++) {
         const cell = this.state.grid[row][col];
