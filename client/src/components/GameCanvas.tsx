@@ -181,6 +181,8 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           
           cellContainer.position.y = row * cellHeight;
           cellContainer.alpha = 1;
+          cellContainer.visible = true;
+          cellContainer.scale.set(1);
           
           if (cellContainer.children[0]) {
             const bg = cellContainer.children[0] as PIXI.Graphics;
@@ -254,8 +256,14 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
   const performCascadeAnimations = async (app: PIXI.Application, cascadeSteps: any[]): Promise<void> => {
     for (const step of cascadeSteps) {
+      // Explosion animation
       await performExplosion(app, step.wins);
+      
+      // Drop animation
       await performDrop(app, step.wins);
+      
+      // Update grid display with new symbols
+      await new Promise(resolve => setTimeout(resolve, 200)); // Brief pause before showing new symbols
       updateGridDisplay(app, step.newGrid);
     }
   };
@@ -292,6 +300,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         if (progress >= 1) {
           app.ticker.remove(explosionTicker as any);
           
+          // Hide exploded cells
           wins.forEach((win: any) => {
             win.cells.forEach((cell: GridCell) => {
               const key = `${cell.row}-${cell.col}`;
@@ -316,10 +325,14 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
       const startTime = Date.now();
       const cellHeight = 500 / symbolsConfig.gridSize.rows;
 
-      const affectedCols = new Set<number>();
+      // Identify affected columns and their explosion rows
+      const affectedCols = new Map<number, number[]>();
       wins.forEach((win: any) => {
         win.cells.forEach((cell: GridCell) => {
-          affectedCols.add(cell.col);
+          if (!affectedCols.has(cell.col)) {
+            affectedCols.set(cell.col, []);
+          }
+          affectedCols.get(cell.col)!.push(cell.row);
         });
       });
 
@@ -328,20 +341,16 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         const progress = Math.min(elapsed / dropDuration, 1);
         const dropDistance = cellHeight * progress;
 
+        // Drop cells above explosions
         cellsRef.current.forEach((cellContainer, key) => {
           const [row, col] = key.split('-').map(Number);
           
-          if (affectedCols.has(col) && cellContainer.visible) {
-            let shouldDrop = false;
-            wins.forEach((win: any) => {
-              win.cells.forEach((cell: GridCell) => {
-                if (cell.col === col && row < cell.row) {
-                  shouldDrop = true;
-                }
-              });
-            });
-
-            if (shouldDrop) {
+          if (affectedCols.has(col)) {
+            const explosionRows = affectedCols.get(col)!;
+            const maxExplosionRow = Math.max(...explosionRows);
+            
+            // If this cell is above any explosion, make it drop
+            if (row < maxExplosionRow && cellContainer.visible) {
               cellContainer.position.y = row * cellHeight + dropDistance;
             }
           }
