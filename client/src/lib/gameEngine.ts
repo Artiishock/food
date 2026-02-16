@@ -28,6 +28,11 @@ export interface Order {
   completed: boolean;
 }
 
+export interface CascadeStep {
+  wins: { symbol: Symbol, cells: GridCell[], count: number }[];
+  newGrid: GridCell[][];
+}
+
 export interface GameState {
   grid: GridCell[][];
   balance: number;
@@ -38,6 +43,7 @@ export interface GameState {
   freeSpinsRemaining: number;
   orders: Order[];
   anteMode: 'none' | 'low' | 'high';
+  cascadeSteps?: CascadeStep[];
 }
 
 export class GameEngine {
@@ -59,7 +65,8 @@ export class GameEngine {
       isFreeSpins: false,
       freeSpinsRemaining: 0,
       orders: [],
-      anteMode: 'none'
+      anteMode: 'none',
+      cascadeSteps: []
     };
   }
 
@@ -125,7 +132,8 @@ export class GameEngine {
     
     this.state.balance -= betAmount;
     this.state.isSpinning = true;
-    this.state.totalWin = 0; // Reset total win for new spin
+    this.state.totalWin = 0;
+    this.state.cascadeSteps = [];
 
     // Clear orders if not in free spins mode
     if (!this.state.isFreeSpins) {
@@ -157,7 +165,7 @@ export class GameEngine {
       this.state.freeSpinsRemaining--;
       if (this.state.freeSpinsRemaining === 0) {
         this.state.isFreeSpins = false;
-        this.checkAllOrdersCompletion(); // Check super bonus only at end of free spins
+        this.checkAllOrdersCompletion();
       }
     }
     
@@ -165,13 +173,13 @@ export class GameEngine {
   }
 
   private generateOrder(): void {
-    if (this.state.isFreeSpins) return; // Orders already generated for free spins
+    if (this.state.isFreeSpins) return;
 
     let orderChance = gameConfig.orders.normalMode.chance;
     if (this.state.anteMode === 'low') {
       orderChance = gameConfig.anteMode.lowAnteOrderChance;
     } else if (this.state.anteMode === 'high') {
-      orderChance = gameConfig.anteMode.highAnteOrderChance; // 100% chance
+      orderChance = gameConfig.anteMode.highAnteOrderChance;
     }
     
     if (Math.random() < orderChance) {
@@ -203,11 +211,16 @@ export class GameEngine {
     const allWins: any[] = [];
     
     while (true) {
+      // Find winning combinations
       const wins = this.findWinningCombinations();
       
       if (wins.length === 0) break;
       
       cascadeCount++;
+      
+      // Store cascade step for animation
+      const stepGrid = this.cloneGrid(this.state.grid);
+      this.state.cascadeSteps!.push({ wins, newGrid: stepGrid });
       
       // Calculate winnings
       for (const win of wins) {
@@ -223,13 +236,17 @@ export class GameEngine {
       this.removeWinningSymbols(wins);
       
       // Drop symbols down
-      await this.dropSymbols();
+      this.dropSymbols();
       
       // Fill empty spaces
       this.fillEmptySpaces();
     }
     
     return { wins: allWins, cascades: cascadeCount, totalWin };
+  }
+
+  private cloneGrid(grid: GridCell[][]): GridCell[][] {
+    return grid.map(row => [...row]);
   }
 
   private findWinningCombinations(): { symbol: Symbol, cells: GridCell[], count: number }[] {
@@ -250,7 +267,7 @@ export class GameEngine {
       }
     }
     
-    // Check for winning combinations
+    // Check for winning combinations (8 or more)
     symbolGroups.forEach((cells, symbolId) => {
       if (cells.length >= symbolsConfig.minWinSymbols) {
         const symbol = this.symbols.find(s => s.id === symbolId)!;
@@ -299,10 +316,7 @@ export class GameEngine {
     });
   }
 
-  private async dropSymbols(): Promise<void> {
-    // Simple delay to simulate animation
-    await new Promise(resolve => setTimeout(resolve, gameConfig.animations.symbolDropSpeed));
-
+  private dropSymbols(): void {
     for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
       let emptyRow = symbolsConfig.gridSize.rows - 1;
       
@@ -325,7 +339,7 @@ export class GameEngine {
       for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
         if (!this.state.grid[row][col]) {
           this.state.grid[row][col] = {
-            symbol: this.getRandomSymbol(true), // Fill with non-scatter symbols
+            symbol: this.getRandomSymbol(true),
             row,
             col,
             id: `${row}-${col}-${Date.now()}-${Math.random()}`
@@ -363,7 +377,6 @@ export class GameEngine {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = gameConfig.freeSpins.spinsAwarded;
     
-    // Generate multiple orders for free spins
     const orderCount = Math.floor(
       Math.random() * 
       (gameConfig.orders.freeSpinsMode.maxOrders - gameConfig.orders.freeSpinsMode.minOrders + 1)
@@ -379,7 +392,7 @@ export class GameEngine {
         (gameConfig.orders.freeSpinsMode.maxQuantity - gameConfig.orders.freeSpinsMode.minQuantity + 1)
       ) + gameConfig.orders.freeSpinsMode.minQuantity;
       
-      const tipMultipliers = gameConfig.orders.normalMode.tipMultipliers; // Use normal mode multipliers for tips
+      const tipMultipliers = gameConfig.orders.normalMode.tipMultipliers;
       const tipMultiplier = tipMultipliers[Math.floor(Math.random() * tipMultipliers.length)];
       
       this.state.orders.push({
@@ -394,7 +407,6 @@ export class GameEngine {
 
   private checkOrderCompletion(): void {
     if (!this.state.isFreeSpins) {
-      // In normal mode, orders expire after one spin
       let orderCompleted = false;
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
@@ -406,12 +418,10 @@ export class GameEngine {
         }
       }
       
-      // Clear orders after spin in normal mode if not completed
       if (!orderCompleted) {
         this.state.orders = [];
       }
     } else {
-      // In free spins mode, mark orders as completed but keep them
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;
@@ -424,7 +434,6 @@ export class GameEngine {
   }
 
   private checkAllOrdersCompletion(): void {
-    // Check if all orders completed in free spins mode
     const allCompleted = this.state.orders.every(order => order.completed);
     
     if (allCompleted && this.state.orders.length > 0) {
@@ -433,7 +442,7 @@ export class GameEngine {
       this.state.totalWin += superBonus;
     }
     
-    this.state.orders = []; // Clear orders after free spins end
+    this.state.orders = [];
   }
 
   public buyFreeSpins(packageType: 'cheap' | 'standard'): void {
@@ -449,7 +458,6 @@ export class GameEngine {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = pkg.spins;
     
-    // Generate orders
     const orderCount = Math.min(pkg.maxOrders, gameConfig.orders.freeSpinsMode.maxOrders);
     this.state.orders = [];
     const foodSymbols = this.symbols.filter(s => !s.isScatter);

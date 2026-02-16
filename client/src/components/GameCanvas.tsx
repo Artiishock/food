@@ -1,6 +1,6 @@
 /*
  * GameCanvas Component - PixiJS Rendering Engine
- * Design: Animated spinning reels with cascading wins
+ * Smooth spinning reels + cascading win animations
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -14,7 +14,6 @@ interface GameCanvasProps {
   onSpinComplete?: (result: any) => void;
 }
 
-// Symbol emoji mapping
 const SYMBOL_EMOJIS: Record<string, string> = {
   'burger': '🍔',
   'drink': '🥤',
@@ -32,7 +31,7 @@ const SYMBOL_EMOJIS: Record<string, string> = {
 export default function GameCanvas({ gameEngine, isSpinning = false, onSpinComplete }: GameCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
-  const cellsRef = useRef<Map<string, PIXI.Container>>(new Map());
+  const cellsRef = useRef<Map<string, { container: PIXI.Container; bg: PIXI.Graphics; emoji: PIXI.Text }>>(new Map());
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,18 +79,18 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     };
   }, []);
 
-  // Handle spinning and grid updates
+  // Handle spinning
   useEffect(() => {
     if (!appRef.current || !isReady) return;
 
     const app = appRef.current;
     const state = gameEngine.getState();
     
-    // Update grid display
-    updateGridDisplay(app, state.grid);
-
     if (isSpinning) {
-      performSpin(app, state.grid);
+      performSpinAnimation(app, state.grid);
+    } else {
+      // Update display after spin completes
+      updateGridDisplay(app, state.grid);
     }
   }, [isSpinning, gameEngine, isReady]);
 
@@ -132,7 +131,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           cellContainer.addChild(emojiText);
           
           app.stage.addChild(cellContainer);
-          cellsRef.current.set(`${row}-${col}`, cellContainer);
+          cellsRef.current.set(`${row}-${col}`, { container: cellContainer, bg, emoji: emojiText });
         }
       }
 
@@ -143,61 +142,157 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
   };
 
   const updateGridDisplay = (app: PIXI.Application, grid: GridCell[][]) => {
-    const cellWidth = 800 / symbolsConfig.gridSize.columns;
-    const cellHeight = 500 / symbolsConfig.gridSize.rows;
-
     for (let row = 0; row < grid.length; row++) {
       for (let col = 0; col < grid[row].length; col++) {
         const cell = grid[row][col];
         const key = `${row}-${col}`;
-        const cellContainer = cellsRef.current.get(key);
+        const cellData = cellsRef.current.get(key);
 
-        if (cellContainer && cell) {
+        if (cellData && cell) {
           const emoji = SYMBOL_EMOJIS[cell.symbol.id] || '❓';
-          const emojiText = cellContainer.children[1] as PIXI.Text;
-          if (emojiText) {
-            emojiText.text = emoji;
-          }
+          cellData.emoji.text = emoji;
+          cellData.bg.clear();
+          cellData.bg.rect(1, 1, 800 / symbolsConfig.gridSize.columns - 2, 500 / symbolsConfig.gridSize.rows - 2);
+          cellData.bg.fill(0xffffff);
+          cellData.bg.stroke({ width: 1, color: 0xcccccc });
         }
       }
     }
   };
 
-  const performSpin = async (app: PIXI.Application, grid: GridCell[][]) => {
+  const performSpinAnimation = async (app: PIXI.Application, grid: GridCell[][]) => {
     const cellWidth = 800 / symbolsConfig.gridSize.columns;
     const cellHeight = 500 / symbolsConfig.gridSize.rows;
-
-    // Animate spinning
     const spinDuration = 2000;
-    const startTime = Date.now();
 
     return new Promise<void>((resolve) => {
+      const startTime = Date.now();
+
       const spinTicker = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / spinDuration, 1);
 
-        // Rotate cells
-        cellsRef.current.forEach((cellContainer) => {
-          cellContainer.rotation = progress * Math.PI * 4;
-          cellContainer.alpha = 0.7 + progress * 0.3;
+        // Smooth spinning animation for all cells
+        cellsRef.current.forEach((cellData) => {
+          cellData.container.rotation = progress * Math.PI * 6;
+          cellData.container.alpha = 0.6 + progress * 0.4;
+          cellData.container.scale.set(0.8 + progress * 0.2);
         });
 
         if (progress >= 1) {
           app.ticker.remove(spinTicker as any);
           
-          // Reset rotation and update display
-          cellsRef.current.forEach((cellContainer) => {
-            cellContainer.rotation = 0;
-            cellContainer.alpha = 1;
+          // Reset animation properties
+          cellsRef.current.forEach((cellData) => {
+            cellData.container.rotation = 0;
+            cellData.container.alpha = 1;
+            cellData.container.scale.set(1);
           });
 
+          // Update grid display
           updateGridDisplay(app, grid);
-          onSpinComplete?.({});
-          resolve();
+
+          // Perform cascade animations if there are wins
+          const state = gameEngine.getState();
+          if (state.cascadeSteps && state.cascadeSteps.length > 0) {
+            performCascadeAnimations(app, state.cascadeSteps).then(() => {
+              onSpinComplete?.({});
+              resolve();
+            });
+          } else {
+            onSpinComplete?.({});
+            resolve();
+          }
         }
       };
 
       app.ticker.add(spinTicker);
+    });
+  };
+
+  const performCascadeAnimations = async (app: PIXI.Application, cascadeSteps: any[]): Promise<void> => {
+    for (const step of cascadeSteps) {
+      // Explosion animation for winning symbols
+      await performExplosion(app, step.wins);
+      
+      // Drop animation
+      await performDrop(app);
+      
+      // Update grid
+      updateGridDisplay(app, step.newGrid);
+    }
+  };
+
+  const performExplosion = async (app: PIXI.Application, wins: any[]): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      const explosionDuration = 600;
+      const startTime = Date.now();
+
+      const explosionTicker = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / explosionDuration, 1);
+
+        // Highlight and scale winning cells
+        wins.forEach((win: any) => {
+          win.cells.forEach((cell: GridCell) => {
+            const key = `${cell.row}-${cell.col}`;
+            const cellData = cellsRef.current.get(key);
+            if (cellData) {
+              cellData.bg.clear();
+              cellData.bg.rect(1, 1, 800 / symbolsConfig.gridSize.columns - 2, 500 / symbolsConfig.gridSize.rows - 2);
+              cellData.bg.fill(0xff6b6b); // Red for explosion
+              cellData.bg.stroke({ width: 2, color: 0xff0000 });
+              
+              cellData.container.scale.set(1 + progress * 0.3);
+              cellData.emoji.alpha = 1 - progress;
+            }
+          });
+        });
+
+        if (progress >= 1) {
+          app.ticker.remove(explosionTicker as any);
+          
+          // Clear explosion effect
+          wins.forEach((win: any) => {
+            win.cells.forEach((cell: GridCell) => {
+              const key = `${cell.row}-${cell.col}`;
+              const cellData = cellsRef.current.get(key);
+              if (cellData) {
+                cellData.container.scale.set(1);
+                cellData.emoji.alpha = 1;
+              }
+            });
+          });
+
+          resolve();
+        }
+      };
+
+      app.ticker.add(explosionTicker);
+    });
+  };
+
+  const performDrop = async (app: PIXI.Application): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      const dropDuration = 400;
+      const startTime = Date.now();
+
+      const dropTicker = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / dropDuration, 1);
+
+        // Simulate drop with scale and position changes
+        cellsRef.current.forEach((cellData) => {
+          cellData.container.y += progress * 5;
+        });
+
+        if (progress >= 1) {
+          app.ticker.remove(dropTicker as any);
+          resolve();
+        }
+      };
+
+      app.ticker.add(dropTicker);
     });
   };
 
