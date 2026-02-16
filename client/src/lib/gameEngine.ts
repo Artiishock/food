@@ -52,7 +52,7 @@ export class GameEngine {
   private initializeState(): GameState {
     return {
       grid: this.generateInitialGrid(),
-      balance: 1000,
+      balance: 1000000,
       currentBet: gameConfig.betting.defaultBet,
       totalWin: 0,
       isSpinning: false,
@@ -72,25 +72,26 @@ export class GameEngine {
           symbol: this.getRandomSymbol(),
           row,
           col,
-          id: `${row}-${col}-${Date.now()}`
+          id: `${row}-${col}-${Date.now()}-${Math.random()}`
         };
       }
     }
     return grid;
   }
 
-  private getRandomSymbol(): Symbol {
-    const totalWeight = this.symbols.reduce((sum, s) => sum + s.weight, 0);
+  private getRandomSymbol(excludeScatter: boolean = false): Symbol {
+    const availableSymbols = excludeScatter ? this.symbols.filter(s => !s.isScatter) : this.symbols;
+    const totalWeight = availableSymbols.reduce((sum, s) => sum + s.weight, 0);
     let random = Math.random() * totalWeight;
     
-    for (const symbol of this.symbols) {
+    for (const symbol of availableSymbols) {
       random -= symbol.weight;
       if (random <= 0) {
         return symbol;
       }
     }
     
-    return this.symbols[0];
+    return availableSymbols[0];
   }
 
   public getState(): GameState {
@@ -124,8 +125,14 @@ export class GameEngine {
     
     this.state.balance -= betAmount;
     this.state.isSpinning = true;
-    
-    // Generate order before spin
+    this.state.totalWin = 0; // Reset total win for new spin
+
+    // Clear orders if not in free spins mode
+    if (!this.state.isFreeSpins) {
+      this.state.orders = [];
+    }
+
+    // Generate order (if applicable) before grid generation
     this.generateOrder();
     
     // Generate new grid
@@ -142,7 +149,7 @@ export class GameEngine {
     this.state.totalWin = result.totalWin;
     this.state.isSpinning = false;
     
-    // Check if orders completed
+    // Check if orders completed (and clear if normal mode)
     this.checkOrderCompletion();
     
     // Decrement free spins if in free spins mode
@@ -150,7 +157,7 @@ export class GameEngine {
       this.state.freeSpinsRemaining--;
       if (this.state.freeSpinsRemaining === 0) {
         this.state.isFreeSpins = false;
-        this.checkAllOrdersCompletion();
+        this.checkAllOrdersCompletion(); // Check super bonus only at end of free spins
       }
     }
     
@@ -158,15 +165,14 @@ export class GameEngine {
   }
 
   private generateOrder(): void {
+    if (this.state.isFreeSpins) return; // Orders already generated for free spins
+
     let orderChance = gameConfig.orders.normalMode.chance;
-    
     if (this.state.anteMode === 'low') {
       orderChance = gameConfig.anteMode.lowAnteOrderChance;
     } else if (this.state.anteMode === 'high') {
-      orderChance = gameConfig.anteMode.highAnteOrderChance;
+      orderChance = gameConfig.anteMode.highAnteOrderChance; // 100% chance
     }
-    
-    if (this.state.isFreeSpins) return; // Orders already generated for free spins
     
     if (Math.random() < orderChance) {
       const foodSymbols = this.symbols.filter(s => !s.isScatter);
@@ -294,6 +300,9 @@ export class GameEngine {
   }
 
   private async dropSymbols(): Promise<void> {
+    // Simple delay to simulate animation
+    await new Promise(resolve => setTimeout(resolve, gameConfig.animations.symbolDropSpeed));
+
     for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
       let emptyRow = symbolsConfig.gridSize.rows - 1;
       
@@ -316,7 +325,7 @@ export class GameEngine {
       for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
         if (!this.state.grid[row][col]) {
           this.state.grid[row][col] = {
-            symbol: this.getRandomSymbol(),
+            symbol: this.getRandomSymbol(true), // Fill with non-scatter symbols
             row,
             col,
             id: `${row}-${col}-${Date.now()}-${Math.random()}`
@@ -338,7 +347,14 @@ export class GameEngine {
       }
     }
     
-    if (scatterCount >= 3 && !this.state.isFreeSpins) {
+    let scatterTrigger = gameConfig.freeSpins.scatterTrigger;
+    if (this.state.anteMode === 'low') {
+      scatterTrigger = Math.max(1, Math.floor(scatterTrigger / gameConfig.anteMode.lowAnteScatterBoost));
+    } else if (this.state.anteMode === 'high') {
+      scatterTrigger = Math.max(1, Math.floor(scatterTrigger / gameConfig.anteMode.highAnteScatterBoost));
+    }
+
+    if (scatterCount >= scatterTrigger && !this.state.isFreeSpins) {
       this.triggerFreeSpins();
     }
   }
@@ -363,7 +379,7 @@ export class GameEngine {
         (gameConfig.orders.freeSpinsMode.maxQuantity - gameConfig.orders.freeSpinsMode.minQuantity + 1)
       ) + gameConfig.orders.freeSpinsMode.minQuantity;
       
-      const tipMultipliers = gameConfig.orders.normalMode.tipMultipliers;
+      const tipMultipliers = gameConfig.orders.normalMode.tipMultipliers; // Use normal mode multipliers for tips
       const tipMultiplier = tipMultipliers[Math.floor(Math.random() * tipMultipliers.length)];
       
       this.state.orders.push({
@@ -379,17 +395,19 @@ export class GameEngine {
   private checkOrderCompletion(): void {
     if (!this.state.isFreeSpins) {
       // In normal mode, orders expire after one spin
+      let orderCompleted = false;
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;
           const tip = this.state.currentBet * order.tipMultiplier;
           this.state.balance += tip;
           this.state.totalWin += tip;
+          orderCompleted = true;
         }
       }
       
-      // Clear orders after spin in normal mode
-      if (!this.state.isFreeSpins) {
+      // Clear orders after spin in normal mode if not completed
+      if (!orderCompleted) {
         this.state.orders = [];
       }
     } else {
@@ -415,7 +433,7 @@ export class GameEngine {
       this.state.totalWin += superBonus;
     }
     
-    this.state.orders = [];
+    this.state.orders = []; // Clear orders after free spins end
   }
 
   public buyFreeSpins(packageType: 'cheap' | 'standard'): void {

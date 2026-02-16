@@ -91,6 +91,16 @@
       }
     },
     {
+      "id": "wrap",
+      "name": "Wrap",
+      "weight": 7,
+      "payouts": {
+        "12+": 50,
+        "10-11": 25,
+        "8-9": 10
+      }
+    },
+    {
       "id": "scatter",
       "name": "Order Ticket",
       "weight": 3,
@@ -98,7 +108,7 @@
       "scatterTrigger": 3
     }
   ],
-  "totalWeight": 110,
+  "totalWeight": 129,
   "gridSize": {
     "rows": 5,
     "columns": 6

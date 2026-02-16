@@ -1,11 +1,11 @@
 /*
  * GameCanvas Component - PixiJS Rendering Engine
- * Design: Animated spinning reels with real food icons
+ * Design: Animated spinning reels with cascading wins
  */
 
 import { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
-import { GameEngine } from '../lib/gameEngine';
+import { GameEngine, GridCell } from '../lib/gameEngine';
 import symbolsConfig from '../config/symbols.json';
 
 interface GameCanvasProps {
@@ -29,12 +29,10 @@ const SYMBOL_EMOJIS: Record<string, string> = {
   'wrap': '🌯',
 };
 
-const SYMBOL_NAMES = ['burger', 'drink', 'pie', 'scatter', 'pizza', 'taco', 'fries', 'burrito', 'hotdog', 'chicken', 'wrap'];
-
 export default function GameCanvas({ gameEngine, isSpinning = false, onSpinComplete }: GameCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
-  const columnsRef = useRef<Map<number, { container: PIXI.Container; sprites: PIXI.Container[]; velocity: number; stopRequested: boolean; finalY: number | null }>>(new Map());
+  const cellsRef = useRef<Map<string, PIXI.Container>>(new Map());
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,9 +45,9 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
       try {
         const app = new PIXI.Application();
         await app.init({
-          width: 900,
-          height: 600,
-          backgroundColor: 0x000000,
+          width: 800,
+          height: 500,
+          backgroundColor: 0x1a1a1a,
           antialias: true,
         });
 
@@ -82,160 +80,61 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     };
   }, []);
 
-  // Handle spinning animation
+  // Handle spinning and grid updates
   useEffect(() => {
-    if (!isSpinning || !appRef.current) return;
+    if (!appRef.current || !isReady) return;
 
     const app = appRef.current;
-    const columns = Array.from(columnsRef.current.values());
-    if (columns.length === 0) return;
+    const state = gameEngine.getState();
+    
+    // Update grid display
+    updateGridDisplay(app, state.grid);
 
-    const cellHeight = 100;
-
-    // Start spinning all columns
-    columns.forEach((col) => {
-      col.velocity = 25 + Math.random() * 10;
-      col.stopRequested = false;
-      col.finalY = null;
-    });
-
-    const startTime = Date.now();
-    const spinDuration = 1000;
-
-    const spinTicker = () => {
-      const now = Date.now();
-      const elapsed = now - startTime;
-      
-      let allStopped = true;
-
-      columns.forEach((col, colIndex) => {
-        const reelStopTime = spinDuration + colIndex * 300;
-        
-        if (elapsed > reelStopTime && !col.stopRequested) {
-          col.stopRequested = true;
-          col.finalY = Math.round(col.container.y / cellHeight) * cellHeight;
-        }
-
-        if (col.velocity > 0 || (col.finalY !== null && Math.abs(col.container.y - col.finalY) > 0.5)) {
-          allStopped = false;
-          
-          if (col.stopRequested && col.finalY !== null) {
-            const diff = col.finalY - col.container.y;
-            
-            col.velocity *= 0.92;
-            
-            if (col.velocity < 2 && Math.abs(diff) < 20) {
-              col.container.y = col.finalY;
-              col.velocity = 0;
-            } else {
-              col.container.y += col.velocity;
-              col.container.y += diff * 0.1;
-            }
-          } else {
-            col.container.y += col.velocity;
-          }
-
-          if (col.container.y > 150) {
-            col.container.y -= cellHeight;
-            if (col.finalY !== null) col.finalY -= cellHeight;
-          } else if (col.container.y < -50) {
-            col.container.y += cellHeight;
-            if (col.finalY !== null) col.finalY += cellHeight;
-          }
-        }
-      });
-
-      if (allStopped) {
-        app.ticker.remove(spinTicker as any);
-        onSpinComplete?.({});
-      }
-    };
-
-    app.ticker.add(spinTicker);
-  }, [isSpinning, onSpinComplete]);
+    if (isSpinning) {
+      performSpin(app, state.grid);
+    }
+  }, [isSpinning, gameEngine, isReady]);
 
   const initializeGame = async (app: PIXI.Application) => {
     try {
       const boardBg = new PIXI.Graphics();
-      boardBg.rect(50, 50, 800, 500);
+      boardBg.rect(0, 0, 800, 500);
       boardBg.fill(0x2a2a2a);
-      boardBg.stroke({ width: 10, color: 0x000000 });
+      boardBg.stroke({ width: 2, color: 0x000000 });
       app.stage.addChild(boardBg);
 
-      const mask = new PIXI.Graphics();
-      mask.rect(50, 50, 800, 500);
-      mask.fill(0xffffff);
-      app.stage.addChild(mask);
-
       const cellWidth = 800 / symbolsConfig.gridSize.columns;
-      const cellHeight = 100;
+      const cellHeight = 500 / symbolsConfig.gridSize.rows;
 
-      for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
-        const container = new PIXI.Container();
-        container.x = 50 + col * cellWidth + cellWidth / 2;
-        container.y = 50;
-        container.mask = mask;
-        
-        const sprites: PIXI.Container[] = [];
-
-        for (let i = -3; i < 8; i++) {
+      // Create grid cells
+      for (let row = 0; row < symbolsConfig.gridSize.rows; row++) {
+        for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
           const cellContainer = new PIXI.Container();
-          cellContainer.position.set(0, i * cellHeight);
+          cellContainer.position.set(col * cellWidth, row * cellHeight);
           
+          // Background
           const bg = new PIXI.Graphics();
-          bg.rect(-cellWidth / 2 + 5, -cellHeight / 2 + 5, cellWidth - 10, cellHeight - 10);
+          bg.rect(1, 1, cellWidth - 2, cellHeight - 2);
           bg.fill(0xffffff);
-          bg.stroke({ width: 3, color: 0x000000 });
+          bg.stroke({ width: 1, color: 0xcccccc });
           cellContainer.addChild(bg);
           
-          const symbolName = SYMBOL_NAMES[Math.abs(i) % SYMBOL_NAMES.length];
-          const emoji = SYMBOL_EMOJIS[symbolName] || '❓';
+          // Emoji text
           const emojiText = new PIXI.Text({
-            text: emoji,
+            text: '?',
             style: {
-              fontSize: 56,
+              fontSize: 40,
               align: 'center',
             }
           });
           emojiText.anchor.set(0.5);
-          emojiText.position.set(0, -12);
+          emojiText.position.set(cellWidth / 2, cellHeight / 2 - 8);
           cellContainer.addChild(emojiText);
           
-          const nameText = new PIXI.Text({
-            text: symbolName.substring(0, 3).toUpperCase(),
-            style: {
-              fontFamily: 'IBM Plex Mono, monospace',
-              fontSize: 11,
-              fontWeight: '600',
-              fill: 0x000000,
-              align: 'center',
-            }
-          });
-          nameText.anchor.set(0.5);
-          nameText.position.set(0, cellHeight / 2 - 12);
-          cellContainer.addChild(nameText);
-          
-          container.addChild(cellContainer);
-          sprites.push(cellContainer);
+          app.stage.addChild(cellContainer);
+          cellsRef.current.set(`${row}-${col}`, cellContainer);
         }
-
-        app.stage.addChild(container);
-        columnsRef.current.set(col, { container, sprites, velocity: 0, stopRequested: false, finalY: null });
       }
-
-      const gridLines = new PIXI.Graphics();
-      for (let i = 0; i <= symbolsConfig.gridSize.columns; i++) {
-        const x = 50 + i * cellWidth;
-        gridLines.moveTo(x, 50);
-        gridLines.lineTo(x, 550);
-      }
-      for (let i = 0; i <= symbolsConfig.gridSize.rows; i++) {
-        const y = 50 + i * cellHeight;
-        gridLines.moveTo(50, y);
-        gridLines.lineTo(850, y);
-      }
-      gridLines.stroke({ width: 2, color: 0x444444 });
-      app.stage.addChild(gridLines);
 
     } catch (error) {
       console.error('Failed to initialize game:', error);
@@ -243,11 +142,70 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     }
   };
 
+  const updateGridDisplay = (app: PIXI.Application, grid: GridCell[][]) => {
+    const cellWidth = 800 / symbolsConfig.gridSize.columns;
+    const cellHeight = 500 / symbolsConfig.gridSize.rows;
+
+    for (let row = 0; row < grid.length; row++) {
+      for (let col = 0; col < grid[row].length; col++) {
+        const cell = grid[row][col];
+        const key = `${row}-${col}`;
+        const cellContainer = cellsRef.current.get(key);
+
+        if (cellContainer && cell) {
+          const emoji = SYMBOL_EMOJIS[cell.symbol.id] || '❓';
+          const emojiText = cellContainer.children[1] as PIXI.Text;
+          if (emojiText) {
+            emojiText.text = emoji;
+          }
+        }
+      }
+    }
+  };
+
+  const performSpin = async (app: PIXI.Application, grid: GridCell[][]) => {
+    const cellWidth = 800 / symbolsConfig.gridSize.columns;
+    const cellHeight = 500 / symbolsConfig.gridSize.rows;
+
+    // Animate spinning
+    const spinDuration = 2000;
+    const startTime = Date.now();
+
+    return new Promise<void>((resolve) => {
+      const spinTicker = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / spinDuration, 1);
+
+        // Rotate cells
+        cellsRef.current.forEach((cellContainer) => {
+          cellContainer.rotation = progress * Math.PI * 4;
+          cellContainer.alpha = 0.7 + progress * 0.3;
+        });
+
+        if (progress >= 1) {
+          app.ticker.remove(spinTicker as any);
+          
+          // Reset rotation and update display
+          cellsRef.current.forEach((cellContainer) => {
+            cellContainer.rotation = 0;
+            cellContainer.alpha = 1;
+          });
+
+          updateGridDisplay(app, grid);
+          onSpinComplete?.({});
+          resolve();
+        }
+      };
+
+      app.ticker.add(spinTicker);
+    });
+  };
+
   if (error) {
     return (
       <div 
         className="flex justify-center items-center bg-red-900 text-white p-4 rounded"
-        style={{ width: '900px', height: '600px' }}
+        style={{ width: '800px', height: '500px' }}
       >
         <div className="text-center">
           <div className="text-xl font-bold mb-2">Error Loading Game</div>
@@ -261,7 +219,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     <div 
       ref={canvasRef} 
       className="flex justify-center items-center bg-gray-900"
-      style={{ width: '900px', height: '600px' }}
+      style={{ width: '800px', height: '500px' }}
     />
   );
 }
