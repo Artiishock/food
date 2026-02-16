@@ -116,7 +116,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         reelContainer.position.set(col * cellWidth, 0);
         
         const mask = new PIXI.Graphics();
-        mask.rect(0, 0, cellWidth, 500);
+        mask.rect(col * cellWidth, 0, cellWidth, 500);
         mask.fill(0xffffff);
         app.stage.addChild(mask);
         reelContainer.mask = mask;
