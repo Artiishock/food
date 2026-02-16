@@ -2,18 +2,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import GameCanvas from '../components/GameCanvas';
 import GameLayout from '../components/GameLayout';
-import GameControls from '../components/GameControls';
-import SpinControls from '../components/SpinControls';
+import BottomControlBar from '../components/BottomControlBar';
+import LeftBanners from '../components/LeftBanners';
 import OrdersDisplay from '../components/OrdersDisplay';
-import BonusesPanel from '../components/BonusesPanel';
-import SettingsPanel from '../components/SettingsPanel';
 import { GameEngine } from '../lib/gameEngine';
 
 export default function Home() {
   const gameEngine = useMemo(() => new GameEngine(), []);
   const [gameState, setGameState] = useState(() => gameEngine.getState());
   const [isSpinning, setIsSpinning] = useState(false);
-  const [autoSpinActive, setAutoSpinActive] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -30,7 +28,6 @@ export default function Home() {
       setGameState(gameEngine.getState());
     } catch (error) {
       console.error(error);
-      setAutoSpinActive(false);
       setIsSpinning(false);
     }
   };
@@ -38,16 +35,18 @@ export default function Home() {
   const handleSpinComplete = () => {
     setIsSpinning(false);
     setGameState(gameEngine.getState());
-    if (autoSpinActive) {
-      setTimeout(handleSpin, 1000);
-    }
   };
 
-  const handleAutoSpin = () => {
-    setAutoSpinActive(!autoSpinActive);
-    if (!autoSpinActive && !isSpinning) {
-      handleSpin();
-    }
+  const handleBetIncrease = () => {
+    const newBet = Math.min(100, gameState.currentBet + 1);
+    gameEngine.setBet(newBet);
+    setGameState(gameEngine.getState());
+  };
+
+  const handleBetDecrease = () => {
+    const newBet = Math.max(1, gameState.currentBet - 1);
+    gameEngine.setBet(newBet);
+    setGameState(gameEngine.getState());
   };
 
   if (!gameState) {
@@ -56,25 +55,8 @@ export default function Home() {
 
   return (
     <GameLayout
-      logo={<div className="text-4xl font-black italic tracking-tighter">FOOD SLOTS</div>}
+      logo={<div className="text-4xl font-black italic tracking-tighter text-center">FOOD<br/>SLOTS</div>}
       orders={<OrdersDisplay orders={gameState.orders} />}
-      spinControls={
-        <SpinControls
-          onSpin={handleSpin}
-          onAutoSpin={handleAutoSpin}
-          isSpinning={isSpinning}
-          autoSpinActive={autoSpinActive}
-        />
-      }
-      betControls={
-        <GameControls
-          gameState={gameState}
-          onSpin={handleSpin}
-          onBetChange={(bet) => gameEngine.setBet(bet)}
-          onAnteChange={(mode) => gameEngine.setAnteMode(mode)}
-          onBuyFreeSpins={(type) => gameEngine.buyFreeSpins(type)}
-        />
-      }
       gameBoard={
         <GameCanvas
           gameEngine={gameEngine}
@@ -82,9 +64,37 @@ export default function Home() {
           onSpinComplete={handleSpinComplete}
         />
       }
-      settings={<SettingsPanel />}
-      balance={<div className="text-mono text-sm">Balance: ${gameState.balance.toFixed(2)}</div>}
-      bonuses={<BonusesPanel />}
+      leftBanners={
+        <LeftBanners
+          isFreeSpins={gameState.isFreeSpins}
+          freeSpinsRemaining={gameState.freeSpinsRemaining}
+          anteMode={gameState.anteMode}
+          onBuyFreeSpins={(type) => {
+            gameEngine.buyFreeSpins(type);
+            setGameState(gameEngine.getState());
+          }}
+          onAnteChange={(mode) => {
+            gameEngine.setAnteMode(mode);
+            setGameState(gameEngine.getState());
+          }}
+          isSpinning={isSpinning}
+        />
+      }
+      bottomBar={
+        <BottomControlBar
+          balance={gameState.balance}
+          currentBet={gameState.currentBet}
+          isSpinning={isSpinning}
+          onSpin={handleSpin}
+          onBetIncrease={handleBetIncrease}
+          onBetDecrease={handleBetDecrease}
+          onAutoSpin={handleSpin}
+          onSettings={() => console.log('Settings')}
+          onInfo={() => console.log('Info')}
+          soundEnabled={soundEnabled}
+          onToggleSound={() => setSoundEnabled(!soundEnabled)}
+        />
+      }
     />
   );
 }
