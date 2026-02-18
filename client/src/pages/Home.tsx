@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from 'react';
 import GameCanvas from '../components/GameCanvas';
 import GameLayout from '../components/GameLayout';
@@ -13,22 +12,20 @@ export default function Home() {
   const [isSpinning, setIsSpinning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setGameState(gameEngine.getState());
-    }, 100);
-    return () => clearInterval(timer);
-  }, [gameEngine]);
-
+  // Remove the interval - only update on explicit actions
+  // This prevents infinite re-renders and animation loops
+  
   const handleSpin = async () => {
     if (isSpinning) return;
+    
     try {
       setIsSpinning(true);
-      await gameEngine.spin();
-      setGameState(gameEngine.getState());
+      const result = await gameEngine.spin();
+      // State will be updated in handleSpinComplete
     } catch (error) {
-      console.error(error);
+      console.error('Spin error:', error);
       setIsSpinning(false);
+      setGameState(gameEngine.getState());
     }
   };
 
@@ -46,6 +43,20 @@ export default function Home() {
   const handleBetDecrease = () => {
     const newBet = Math.max(1, gameState.currentBet - 1);
     gameEngine.setBet(newBet);
+    setGameState(gameEngine.getState());
+  };
+
+  const handleBuyFreeSpins = (type: 'cheap' | 'standard') => {
+    try {
+      gameEngine.buyFreeSpins(type);
+      setGameState(gameEngine.getState());
+    } catch (error) {
+      console.error('Failed to buy free spins:', error);
+    }
+  };
+
+  const handleAnteChange = (mode: 'none' | 'low' | 'high') => {
+    gameEngine.setAnteMode(mode);
     setGameState(gameEngine.getState());
   };
 
@@ -69,14 +80,8 @@ export default function Home() {
           isFreeSpins={gameState.isFreeSpins}
           freeSpinsRemaining={gameState.freeSpinsRemaining}
           anteMode={gameState.anteMode}
-          onBuyFreeSpins={(type) => {
-            gameEngine.buyFreeSpins(type);
-            setGameState(gameEngine.getState());
-          }}
-          onAnteChange={(mode) => {
-            gameEngine.setAnteMode(mode);
-            setGameState(gameEngine.getState());
-          }}
+          onBuyFreeSpins={handleBuyFreeSpins}
+          onAnteChange={handleAnteChange}
           isSpinning={isSpinning}
         />
       }
