@@ -1,23 +1,12 @@
 
 /*
  * GameCanvas — Real Reel Machine with Sprite Sheet
- *
- * SETUP: Copy symbols.png into client/public/symbols.png
- *
- * Architecture:
- *   - Each reel has a container with (ROWS + BUFFER*2) sprites
- *   - Container.y scrolls down; sprites wrap around for infinite scroll
- *   - No symbols are ever destroyed – only texture + position update
- *   - After stop: snap to grid, write final symbols
- *   - Cascades: explode → drop with gravity → fill from top
  */
 
 import { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { GameEngine, GridCell, WinInfo } from '../lib/gameEngine';
 import symbolsConfig from '../config/symbols.json';
-
-/* ─────────────── Config ─────────────── */
 
 interface GameCanvasProps {
   gameEngine: GameEngine;
@@ -27,25 +16,20 @@ interface GameCanvasProps {
 
 const CANVAS_W = 800;
 const CANVAS_H = 500;
-const ROWS     = symbolsConfig.gridSize.rows;      // 5
-const COLS     = symbolsConfig.gridSize.columns;   // 6
-const CW       = CANVAS_W / COLS;   // cell width  ≈ 133
-const CH       = CANVAS_H / ROWS;   // cell height = 100
-const BUFFER   = 4;                 // extra symbols above + below viewport
+const ROWS     = symbolsConfig.gridSize.rows;
+const COLS     = symbolsConfig.gridSize.columns;
+const CW       = CANVAS_W / COLS;
+const CH       = CANVAS_H / ROWS;
+const BUFFER   = 4;
 
-// Reel physics
-const SPIN_SPEED   = 28;   // px per frame
-const DECEL        = 0.55; // px²/frame deceleration
-const STOP_DELAY   = 160;  // ms between each reel stopping
-const SPIN_BASE_MS = 1800; // base spin duration
+const SPIN_SPEED   = 28;
+const DECEL        = 0.55;
+const STOP_DELAY   = 160;
+const SPIN_BASE_MS = 1800;
 
-// Cascade physics
 const GRAVITY = 1.3;
 const BOUNCE  = 0.28;
 
-/* ─────────────── Sprite-sheet frames ─────────────── */
-
-// symbols.png is 1024×1024, 3×4 grid (last row has 2 centered items)
 const SHEET_FRAMES: Record<string, { x: number; y: number; w: number; h: number }> = {
   burger:  { x: 0,   y: 50,  w: 341, h: 236 },
   drink:   { x: 321, y: 30,  w: 341, h: 256 },
@@ -62,8 +46,6 @@ const SHEET_FRAMES: Record<string, { x: number; y: number; w: number; h: number 
 
 const FOOD_IDS = Object.keys(SHEET_FRAMES).filter(k => k !== 'scatter');
 
-/* ─────────────── Types ─────────────── */
-
 interface ReelSlot {
   container: PIXI.Container;
   sprite:    PIXI.Sprite;
@@ -78,10 +60,6 @@ interface Reel {
   spinning:  boolean;
 }
 
-/* ═══════════════════════════════════════════════════ */
-/*                     COMPONENT                       */
-/* ═══════════════════════════════════════════════════ */
-
 export default function GameCanvas({ gameEngine, isSpinning = false, onSpinComplete }: GameCanvasProps) {
   const mountRef   = useRef<HTMLDivElement>(null);
   const appRef     = useRef<PIXI.Application | null>(null);
@@ -93,7 +71,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
   const [ready, setReady] = useState(false);
   const [err,   setErr  ] = useState<string | null>(null);
 
-  /* ── Init ── */
   useEffect(() => {
     if (!mountRef.current) return;
     let alive = true;
@@ -132,15 +109,24 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
   useEffect(() => {
     if (!ready || !isSpinning || busyRef.current) return;
     const state = gameEngine.getState();
-    runSpinSequence(state);
+
+    // ─── ИСПРАВЛЕНИЕ БАГА С ПОБЕДНОЙ ЛОГИКОЙ ───
+    // ПРОБЛЕМА: state.grid = финальная сетка ПОСЛЕ всех каскадов.
+    // animateReels(state.grid) показывал финал, а потом doCascade подсвечивал
+    // позиции из первого каскада — там уже другие символы. Отсюда "разные символы в победе".
+    //
+    // РЕШЕНИЕ: animateReels показывает начальную сетку (до первого каскада).
+    // Берём её из cascadeSteps[0].gridBeforeRemoval — это сетка сразу после
+    // генерации барабанов, до первого взрыва.
+    const initialGrid = state.cascadeSteps.length > 0
+      ? state.cascadeSteps[0].gridBeforeRemoval
+      : state.grid;
+
+    runSpinSequence(initialGrid, state.cascadeSteps ?? []);
   }, [isSpinning, ready]);
 
-  /* ════════════════════════════════════
-     TEXTURE LOADING
-  ════════════════════════════════════ */
   const loadTextures = async (app: PIXI.Application) => {
     const baseTexture = await PIXI.Assets.load('/symbols.png');
-
     for (const [id, f] of Object.entries(SHEET_FRAMES)) {
       const frame = new PIXI.Rectangle(f.x, f.y, f.w, f.h);
       const tex   = new PIXI.Texture({ source: baseTexture.source, frame });
@@ -152,21 +138,15 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     return textureMap.current.get(id) ?? PIXI.Texture.WHITE;
   };
 
-  /* ════════════════════════════════════
-     BUILD REELS
-  ════════════════════════════════════ */
   const buildReels = (app: PIXI.Application) => {
-    // Board background
     const bg = new PIXI.Graphics();
     bg.rect(0, 0, CANVAS_W, CANVAS_H).fill(0x1e1e2e);
     app.stage.addChild(bg);
 
-    // Clip mask (only show 800×500 viewport)
     const clipMask = new PIXI.Graphics();
     clipMask.rect(0, 0, CANVAS_W, CANVAS_H).fill(0xffffff);
     app.stage.addChild(clipMask);
 
-    // Per-column reel containers
     for (let col = 0; col < COLS; col++) {
       const container = new PIXI.Container();
       container.x = col * CW;
@@ -178,21 +158,14 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
       for (let i = 0; i < total; i++) {
         const slot = buildSlot(FOOD_IDS[i % FOOD_IDS.length]);
-        // Position relative to container: slot 0 starts BUFFER cells above screen
         slot.container.y = (i - BUFFER) * CH;
         container.addChild(slot.container);
         slots.push(slot);
       }
 
-      reelsRef.current.push({
-        container,
-        slots,
-        vel: 0,
-        spinning: false,
-      });
+      reelsRef.current.push({ container, slots, vel: 0, spinning: false });
     }
 
-    // Reel separators (decorative)
     const lines = new PIXI.Graphics();
     for (let col = 1; col < COLS; col++) {
       lines.moveTo(col * CW, 0).lineTo(col * CW, CANVAS_H);
@@ -200,7 +173,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     lines.stroke({ width: 2, color: 0x333355 });
     app.stage.addChild(lines);
 
-    // FX layer on top
     const fx = new PIXI.Container();
     fxLayerRef.current = fx;
     app.stage.addChild(fx);
@@ -208,23 +180,17 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
   const buildSlot = (symbolId: string): ReelSlot => {
     const container = new PIXI.Container();
-
-    // Background tile
     const bg = new PIXI.Graphics();
     bg.roundRect(2, 2, CW - 4, CH - 4, 6).fill(0x2a2a3e).stroke({ width: 1.5, color: 0x444466 });
     container.addChild(bg);
-
-    // Symbol sprite
     const sprite = new PIXI.Sprite(getTexture(symbolId));
     sprite.anchor.set(0.5);
     sprite.position.set(CW / 2, CH / 2);
     fitSprite(sprite, CW - 12, CH - 12);
     container.addChild(sprite);
-
     return { container, sprite, bg, symbolId };
   };
 
-  /** Scale sprite to fit inside maxW × maxH while keeping aspect ratio */
   const fitSprite = (sprite: PIXI.Sprite, maxW: number, maxH: number) => {
     const tex = sprite.texture;
     if (!tex.width || !tex.height) return;
@@ -232,9 +198,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     sprite.scale.set(scale);
   };
 
-  /* ════════════════════════════════════
-     FILL REELS WITH GRID (static)
-  ════════════════════════════════════ */
   const fillReelsWithGrid = (grid: GridCell[][], resetPositions = false) => {
     for (let col = 0; col < COLS; col++) {
       const reel = reelsRef.current[col];
@@ -246,18 +209,16 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         reel.spinning = false;
       }
 
-      // Set visible slots (BUFFER … BUFFER+ROWS-1)
       for (let row = 0; row < ROWS; row++) {
         const slot = reel.slots[row + BUFFER];
         const cell = grid[row]?.[col];
         if (slot && cell) {
           setSlotSymbol(slot, cell.symbol.id);
-          slot.container.y = (row - 0) * CH; // relative: y=0 is top of viewport
+          slot.container.y = row * CH;
           resetSlotAppearance(slot);
         }
       }
 
-      // Fill buffer slots (above and below) with random food
       for (let i = 0; i < BUFFER; i++) {
         const topSlot = reel.slots[i];
         topSlot.container.y = (i - BUFFER) * CH;
@@ -292,18 +253,15 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
   /* ════════════════════════════════════
      SPIN SEQUENCE
+     initialGrid — сетка ДО каскадов (показывается при остановке барабанов)
+     cascadeSteps — массив шагов, каждый знает свои победы и финальную сетку
   ════════════════════════════════════ */
-  const runSpinSequence = async (state: any) => {
+  const runSpinSequence = async (initialGrid: GridCell[][], cascadeSteps: any[]) => {
     busyRef.current = true;
     try {
-      // 1. Spin (final symbols already set inside animateReels)
-      await animateReels(state.grid);
-
-      // 2. Brief pause
+      await animateReels(initialGrid);
       await sleep(250);
-
-      // 3. Cascades
-      for (const step of (state.cascadeSteps ?? [])) {
+      for (const step of cascadeSteps) {
         await doCascade(step);
       }
     } finally {
@@ -315,14 +273,13 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
   /* ════════════════════════════════════
      REEL SPIN ANIMATION
   ════════════════════════════════════ */
- const animateReels = (finalGrid: GridCell[][]): Promise<void> => {
+  const animateReels = (finalGrid: GridCell[][]): Promise<void> => {
     return new Promise(resolve => {
       const app = appRef.current!;
       let elapsed = 0;
 
       const totalReelH = (ROWS + BUFFER * 2) * CH;
 
-      // Финальные символы для каждой колонки
       const finalSymbolsPerCol: string[][] = [];
       for (let col = 0; col < COLS; col++) {
         finalSymbolsPerCol[col] = [];
@@ -331,12 +288,8 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         }
       }
 
-      // ─── ИНИЦИАЛИЗАЦИЯ ───
-      // Все слоты получают СЛУЧАЙНЫЕ символы.
-      // Финальные символы пока НЕ ставим ни в один слот.
       for (let col = 0; col < COLS; col++) {
         const reel = reelsRef.current[col];
-
         reel.container.y = 0;
         reel.vel = SPIN_SPEED;
         reel.spinning = true;
@@ -354,8 +307,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         }
       }
 
-      // Трекер: сколько полных оборотов сделал каждый рил после начала торможения
-      // Используем это чтобы понять — финальные символы уже "загружены" в слоты или нет
       const finalLoaded = new Array(COLS).fill(false);
 
       const tick = (ticker: PIXI.Ticker) => {
@@ -371,38 +322,19 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           if (elapsed >= stopAt) {
             reel.vel = Math.max(0, reel.vel - DECEL);
 
-            // Когда скорость упала достаточно и финальные символы ещё не загружены —
-            // загружаем их в слоты которые СЕЙЧАС выше экрана (не видны пользователю).
-            // Делаем это один раз на рил.
             if (!finalLoaded[col] && reel.vel < SPIN_SPEED * 0.6) {
               finalLoaded[col] = true;
 
-              // Определяем текущее абсолютное положение каждого слота
-              // и находим те что выше viewport (screenY < -CH*0.5)
-              // Присваиваем финальные символы слотам с наименьшим screenY
-              // (они первыми "въедут" в viewport снизу когда рил остановится)
-
-              // Собираем все слоты с их текущими screenY
-              const slotsWithY = reel.slots.map((slot, idx) => ({
+              const slotsWithY = reel.slots.map((slot) => ({
                 slot,
-                idx,
                 screenY: slot.container.y + reel.container.y,
               }));
 
-              // Слоты что сейчас выше экрана — кандидаты для записи финальных символов
               const aboveScreen = slotsWithY
                 .filter(s => s.screenY < -CH * 0.5)
-                .sort((a, b) => b.screenY - a.screenY); // ближайшие к верху экрана — первые
+                .sort((a, b) => b.screenY - a.screenY);
 
-              // Нам нужно ROWS слотов (по одному на каждую строку)
-              // Берём ближайшие к верху экрана — они появятся последними,
-              // то есть остановятся именно в видимой зоне
-              // ROWS слотов: берём последние ROWS из aboveScreen (самые дальние от экрана)
-              // На самом деле нам нужны те что остановятся в строках 0..ROWS-1.
-              // Проще: назначаем финальные символы слотам которые сейчас
-              // находятся в позиции -(1..ROWS)*CH от верха экрана
               for (let row = 0; row < ROWS && row < aboveScreen.length; row++) {
-                // row=0 → ближайший к верху экрана слот → остановится в строке 0
                 setSlotSymbol(aboveScreen[row].slot, finalSymbolsPerCol[col][row]);
               }
             }
@@ -411,13 +343,10 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           if (reel.vel > 0) {
             reel.container.y += reel.vel;
 
-            // Врап: слоты ушедшие за нижний край → переносим наверх
             reel.slots.forEach(slot => {
               const screenY = slot.container.y + reel.container.y;
               if (screenY > CANVAS_H + CH) {
                 slot.container.y -= totalReelH;
-                // В буфере выше экрана ставим случайные символы
-                // (финальные уже загружены отдельно)
                 if (!finalLoaded[col]) {
                   setSlotSymbol(slot, randomFood());
                 }
@@ -426,19 +355,13 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
               }
             });
           } else {
-            // ─── ОСТАНОВКА ───
             reel.vel = 0;
             reel.spinning = false;
-
-            // ВАЖНО: сбрасываем container.y = 0 и ставим все слоты
-            // на абсолютные позиции. Никакого "row * CH - container.y".
             reel.container.y = 0;
 
             for (let row = 0; row < ROWS; row++) {
               const slot = reel.slots[row + BUFFER];
               if (!slot) continue;
-
-              // Финальный символ — гарантируем правильный
               setSlotSymbol(slot, finalSymbolsPerCol[col][row]);
               slot.container.y = row * CH;
               slot.container.visible = true;
@@ -446,13 +369,9 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
               slot.container.scale.set(1);
               slot.container.rotation = 0;
               slot.bg.clear();
-              slot.bg
-                .roundRect(2, 2, CW - 4, CH - 4, 6)
-                .fill(0x2a2a3e)
-                .stroke({ width: 1.5, color: 0x444466 });
+              slot.bg.roundRect(2, 2, CW - 4, CH - 4, 6).fill(0x2a2a3e).stroke({ width: 1.5, color: 0x444466 });
             }
 
-            // Буферные слоты убираем за пределы viewport
             for (let i = 0; i < BUFFER; i++) {
               reel.slots[i].container.y = (i - BUFFER) * CH;
               reel.slots[ROWS + BUFFER + i].container.y = (ROWS + i) * CH;
@@ -463,12 +382,9 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         if (allDone) {
           app.ticker.remove(tick);
 
-          // Финальная гарантия: ещё раз ставим всё в правильные позиции
-          // (на случай если ticker успел сделать ещё один кадр после остановки)
           for (let col = 0; col < COLS; col++) {
             const reel = reelsRef.current[col];
             reel.container.y = 0;
-
             for (let row = 0; row < ROWS; row++) {
               const slot = reel.slots[row + BUFFER];
               if (!slot) continue;
@@ -479,10 +395,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
               slot.container.scale.set(1);
               slot.container.rotation = 0;
               slot.bg.clear();
-              slot.bg
-                .roundRect(2, 2, CW - 4, CH - 4, 6)
-                .fill(0x2a2a3e)
-                .stroke({ width: 1.5, color: 0x444466 });
+              slot.bg.roundRect(2, 2, CW - 4, CH - 4, 6).fill(0x2a2a3e).stroke({ width: 1.5, color: 0x444466 });
             }
           }
 
@@ -502,6 +415,23 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     (step.wins as WinInfo[]).forEach(w =>
       w.cells.forEach(c => winPositions.add(`${c.row}-${c.col}`))
     );
+
+    // Убеждаемся что на экране правильные символы перед подсветкой
+    // Используем gridBeforeRemoval — сетку до взрыва этого каскада
+    if (step.gridBeforeRemoval) {
+      for (const pos of winPositions) {
+        const [row, col] = pos.split('-').map(Number);
+        const slot = getSlotAtRC(row, col);
+        const cell = step.gridBeforeRemoval[row]?.[col];
+        if (slot && cell) {
+          // Если символ не совпадает — исправляем (защита от рассинхронизации)
+          if (slot.symbolId !== cell.symbol.id) {
+            setSlotSymbol(slot, cell.symbol.id);
+            resetSlotAppearance(slot);
+          }
+        }
+      }
+    }
 
     await highlightCells(winPositions);
     await explodeCells(winPositions);
@@ -555,7 +485,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         positions.forEach(pos => {
           const slot = getSlotAt(pos);
           if (!slot) return;
-          
           slot.container.scale.set(1 + Math.sin(p * Math.PI) * 0.55);
           slot.container.rotation = p * Math.PI * 2;
           slot.container.alpha    = 1 - p;
@@ -566,13 +495,11 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         });
 
         if (p >= 1) {
-          // Hide exploded symbols completely
           positions.forEach(pos => {
             const slot = getSlotAt(pos);
             if (slot) {
               slot.container.visible = false;
               slot.container.alpha = 0;
-              // Move it off-screen to avoid any rendering artifacts
               slot.container.y = -9999;
             }
           });
@@ -588,38 +515,31 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     new Promise(resolve => {
       const app = appRef.current!;
 
-      // Prepare items: update slot symbols then launch them from above
       type Item = { slot: ReelSlot; targetY: number; vy: number; landed: boolean };
       const items: Item[] = [];
 
       for (let col = 0; col < COLS; col++) {
         const reel = reelsRef.current[col];
         if (!reel) continue;
-        
-        // Reset reel container position
         reel.container.y = 0;
-        
+
         for (let row = 0; row < ROWS; row++) {
           const slot = reel.slots[row + BUFFER];
           const cell = finalGrid[row]?.[col];
           if (!slot || !cell) continue;
 
           setSlotSymbol(slot, cell.symbol.id);
-          
-          // Reset appearance
           slot.container.visible = true;
           slot.container.alpha = 1;
           slot.container.scale.set(1);
           slot.container.rotation = 0;
-          
           slot.bg.clear();
           slot.bg.roundRect(2, 2, CW - 4, CH - 4, 6)
             .fill(0x2a2a3e)
             .stroke({ width: 1.5, color: 0x444466 });
 
           const targetY = row * CH;
-          slot.container.y = targetY - CH * (BUFFER + 1); // start above
-
+          slot.container.y = targetY - CH * (BUFFER + 1);
           items.push({ slot, targetY, vy: 0, landed: false });
         }
       }
@@ -629,20 +549,16 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
         items.forEach(item => {
           if (item.landed) return;
-
           item.vy += GRAVITY;
           item.slot.container.y += item.vy;
 
           if (item.slot.container.y >= item.targetY) {
             item.slot.container.y = item.targetY;
             item.vy = -(item.vy * BOUNCE);
-
             if (Math.abs(item.vy) < 0.6) {
               item.vy = 0;
               item.slot.container.y = item.targetY;
               item.landed = true;
-              
-              // Ensure visible at landing
               item.slot.container.visible = true;
               item.slot.container.alpha = 1;
             }
@@ -653,16 +569,12 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
         if (allDone) {
           app.ticker.remove(tick);
-          
-          // Final check: ensure all slots are visible and at correct positions
           for (let col = 0; col < COLS; col++) {
             const reel = reelsRef.current[col];
             if (!reel) continue;
-            
             for (let row = 0; row < ROWS; row++) {
               const slot = reel.slots[row + BUFFER];
               const cell = finalGrid[row]?.[col];
-              
               if (slot && cell) {
                 slot.container.y = row * CH;
                 slot.container.visible = true;
@@ -672,7 +584,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
               }
             }
           }
-          
           resolve();
         }
       };
@@ -727,18 +638,15 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
   /* ════════════════════════════════════
      HELPERS
   ════════════════════════════════════ */
-  /** Get the slot at a "row-col" string key */
   const getSlotAt = (key: string): ReelSlot | null => {
     const [row, col] = key.split('-').map(Number);
     return getSlotAtRC(row, col);
   };
 
-  /** Get the slot for visible row/col (BUFFER offset applied) */
   const getSlotAtRC = (row: number, col: number): ReelSlot | null => {
     const reel = reelsRef.current[col];
     if (!reel) return null;
-    const slot = reel.slots[row + BUFFER];
-    return slot ?? null;
+    return reel.slots[row + BUFFER] ?? null;
   };
 
   const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -751,9 +659,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
             (ab + (bb - ab) * t);
   };
 
-  /* ════════════════════════════════════
-     DESTROY
-  ════════════════════════════════════ */
   const destroyAll = () => {
     try {
       appRef.current?.ticker.stop();
@@ -765,9 +670,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     } catch { /* ignore */ }
   };
 
-  /* ════════════════════════════════════
-     RENDER
-  ════════════════════════════════════ */
   if (err) {
     return (
       <div style={{ width: CANVAS_W, height: CANVAS_H }}
