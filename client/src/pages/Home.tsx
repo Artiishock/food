@@ -1,10 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import GameCanvas from '../components/GameCanvas';
 import GameLayout from '../components/GameLayout';
 import BottomControlBar from '../components/BottomControlBar';
 import LeftBanners from '../components/LeftBanners';
 import OrdersDisplay from '../components/OrdersDisplay';
-import { GameEngine } from '../lib/gameEngine';
+import TipsNotification from '../components/TipsNotification'; // ← НОВЫЙ ИМПОРТ
+import { GameEngine, Order } from '../lib/gameEngine';
+import symbolsConfig from '../config/symbols.json'; // ← НОВЫЙ ИМПОРТ
+import gameConfig from '../config/gameConfig.json'; // ← НОВЫЙ ИМПОРТ
+import '../styles/orders.css'; // ← НОВЫЙ ИМПОРТ
 
 export default function Home() {
   const gameEngine = useMemo(() => new GameEngine(), []);
@@ -12,8 +16,12 @@ export default function Home() {
   const [isSpinning, setIsSpinning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Remove the interval - only update on explicit actions
-  // This prevents infinite re-renders and animation loops
+  // ═══ НОВЫЙ STATE ДЛЯ TIPS NOTIFICATION ═══
+  const [showTipsNotification, setShowTipsNotification] = useState(false);
+  const [completedOrdersForNotif, setCompletedOrdersForNotif] = useState<Order[]>([]);
+  const [superBonusAwarded, setSuperBonusAwarded] = useState(false);
+  const [superBonusAmount, setSuperBonusAmount] = useState(0);
+  // ════════════════════════════════════════
   
   const handleSpin = async () => {
     if (isSpinning) return;
@@ -31,7 +39,36 @@ export default function Home() {
 
   const handleSpinComplete = () => {
     setIsSpinning(false);
-    setGameState(gameEngine.getState());
+    const newState = gameEngine.getState();
+    setGameState(newState);
+
+    // ═══ НОВАЯ ЛОГИКА: Проверка завершенных заказов ═══
+    const completed = newState.orders.filter(o => o.completed);
+    
+    if (completed.length > 0) {
+      console.log('✅ Orders completed:', completed);
+      
+      // Проверяем Super Bonus (все заказы выполнены после Free Spins)
+      const allCompleted = newState.orders.length > 0 && 
+                           newState.orders.every(o => o.completed) &&
+                           !newState.isFreeSpins && 
+                           newState.freeSpinsRemaining === 0;
+      
+      const superBonus = allCompleted 
+        ? newState.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier 
+        : 0;
+      
+      if (superBonus > 0) {
+        console.log('🎉 SUPER BONUS AWARDED:', superBonus);
+      }
+      
+      // Показываем уведомление
+      setCompletedOrdersForNotif(completed);
+      setSuperBonusAwarded(allCompleted);
+      setSuperBonusAmount(superBonus);
+      setShowTipsNotification(true);
+    }
+    // ═══════════════════════════════════════════════════
   };
 
   const handleBetIncrease = () => {
@@ -60,46 +97,71 @@ export default function Home() {
     setGameState(gameEngine.getState());
   };
 
+  // ═══ НОВЫЙ HANDLER ДЛЯ ЗАКРЫТИЯ NOTIFICATION ═══
+  const handleTipsNotificationComplete = () => {
+    setShowTipsNotification(false);
+    setCompletedOrdersForNotif([]);
+    setSuperBonusAwarded(false);
+    setSuperBonusAmount(0);
+  };
+  // ═════════════════════════════════════════════════
+
   if (!gameState) {
     return <div className="text-center p-8">Loading...</div>;
   }
 
   return (
-    <GameLayout
-      logo={<div className="text-4xl font-black italic tracking-tighter text-center">FOOD<br/>SLOTS</div>}
-      orders={<OrdersDisplay orders={gameState.orders} />}
-      gameBoard={
-        <GameCanvas
-          gameEngine={gameEngine}
-          isSpinning={isSpinning}
-          onSpinComplete={handleSpinComplete}
-        />
-      }
-      leftBanners={
-        <LeftBanners
-          isFreeSpins={gameState.isFreeSpins}
-          freeSpinsRemaining={gameState.freeSpinsRemaining}
-          anteMode={gameState.anteMode}
-          onBuyFreeSpins={handleBuyFreeSpins}
-          onAnteChange={handleAnteChange}
-          isSpinning={isSpinning}
-        />
-      }
-      bottomBar={
-        <BottomControlBar
-          balance={gameState.balance}
+    <>
+      <GameLayout
+        logo={<div className="text-4xl font-black italic tracking-tighter text-center">FOOD<br/>SLOTS</div>}
+        orders={<OrdersDisplay orders={gameState.orders} />}
+        gameBoard={
+          <GameCanvas
+            gameEngine={gameEngine}
+            isSpinning={isSpinning}
+            onSpinComplete={handleSpinComplete}
+          />
+        }
+        leftBanners={
+          <LeftBanners
+            isFreeSpins={gameState.isFreeSpins}
+            freeSpinsRemaining={gameState.freeSpinsRemaining}
+            anteMode={gameState.anteMode}
+            onBuyFreeSpins={handleBuyFreeSpins}
+            onAnteChange={handleAnteChange}
+            isSpinning={isSpinning}
+          />
+        }
+        bottomBar={
+          <BottomControlBar
+            balance={gameState.balance}
+            currentBet={gameState.currentBet}
+            isSpinning={isSpinning}
+            onSpin={handleSpin}
+            onBetIncrease={handleBetIncrease}
+            onBetDecrease={handleBetDecrease}
+            onAutoSpin={handleSpin}
+            onSettings={() => console.log('Settings')}
+            onInfo={() => console.log('Info')}
+            soundEnabled={soundEnabled}
+            onToggleSound={() => setSoundEnabled(!soundEnabled)}
+          />
+        }
+      />
+
+      {/* ═══ НОВЫЙ КОМПОНЕНТ: Tips Notification ═══ */}
+      {showTipsNotification && (
+        <TipsNotification
+          completedOrders={completedOrdersForNotif}
+          symbols={symbolsConfig.symbols}
           currentBet={gameState.currentBet}
-          isSpinning={isSpinning}
-          onSpin={handleSpin}
-          onBetIncrease={handleBetIncrease}
-          onBetDecrease={handleBetDecrease}
-          onAutoSpin={handleSpin}
-          onSettings={() => console.log('Settings')}
-          onInfo={() => console.log('Info')}
-          soundEnabled={soundEnabled}
-          onToggleSound={() => setSoundEnabled(!soundEnabled)}
+          isFreeSpins={gameState.isFreeSpins}
+          superBonusAwarded={superBonusAwarded}
+          superBonusAmount={superBonusAmount}
+          onComplete={handleTipsNotificationComplete}
         />
-      }
-    />
+      )}
+      {/* ═════════════════════════════════════════ */}
+    </>
   );
 }

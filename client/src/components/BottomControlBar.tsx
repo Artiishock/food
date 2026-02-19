@@ -1,5 +1,11 @@
-import { Volume2, VolumeX, Info, Settings } from 'lucide-react';
-import { Button } from './ui/button';
+import React from 'react';
+import './BottomControlBar.css'; // импорт стилей
+
+//icon
+
+import { ImSpinner11 } from "react-icons/im";
+import { MdOutlineMotionPhotosAuto } from "react-icons/md";
+import { IoIosSettings } from "react-icons/io";
 
 interface BottomControlBarProps {
   balance: number;
@@ -8,11 +14,11 @@ interface BottomControlBarProps {
   onSpin: () => void;
   onBetIncrease: () => void;
   onBetDecrease: () => void;
-  onAutoSpin: () => void;
-  onSettings: () => void;
-  onInfo: () => void;
-  soundEnabled: boolean;
-  onToggleSound: () => void;
+  onAutoSpin?: () => void;
+  onSettings?: () => void;
+  onInfo?: () => void;
+  soundEnabled?: boolean;
+  onToggleSound?: () => void;
 }
 
 export default function BottomControlBar({
@@ -25,105 +31,107 @@ export default function BottomControlBar({
   onAutoSpin,
   onSettings,
   onInfo,
-  soundEnabled,
+  soundEnabled = true,
   onToggleSound,
 }: BottomControlBarProps) {
+  const formatMoney = (val: number) =>
+    '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 h-24 flex items-center justify-between px-8 border-t-4 border-gray-800">
-      {/* Left Section: Settings, Info, Sound */}
-      <div className="flex items-center gap-4">
-        {/* Settings Button */}
-        <button
-          onClick={onSettings}
-          className="w-12 h-12 rounded-full bg-gray-500 hover:bg-gray-400 flex items-center justify-center border-2 border-gray-700 transition"
-          title="Settings"
-        >
-          <Settings size={24} className="text-white" />
-        </button>
+    <div className="bottom-control-bar">
+      {/* Левая группа */}
+      <div className="left-group">
+        {/* Стек иконок (Settings + Sound) */}
+        <div className="icon-stack">
+          <button
+            className="icon-button"
+            onClick={onSettings}
+            aria-label="Settings"
+          >
+          <IoIosSettings />
+          </button>
 
-        {/* Sound Button */}
-        <button
-          onClick={onToggleSound}
-          className="w-12 h-12 rounded-full bg-gray-500 hover:bg-gray-400 flex items-center justify-center border-2 border-gray-700 transition"
-          title="Sound"
-        >
-          {soundEnabled ? (
-            <Volume2 size={24} className="text-white" />
-          ) : (
-            <VolumeX size={24} className="text-white" />
-          )}
-        </button>
-
-        {/* Info Button */}
-        <button
-          onClick={onInfo}
-          className="w-12 h-12 rounded-full bg-gray-500 hover:bg-gray-400 flex items-center justify-center border-2 border-gray-700 transition"
-          title="Info"
-        >
-          <Info size={24} className="text-white" />
-        </button>
-
-        {/* Credit Display */}
-        <div className="ml-8 text-white">
-          <div className="text-xs font-bold text-yellow-400">CREDIT</div>
-          <div className="text-2xl font-bold">${balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
-        </div>
-      </div>
-
-      {/* Center Section: Bet Controls */}
-      <div className="flex items-center gap-6">
-        <div className="text-white text-right">
-          <div className="text-xs font-bold text-yellow-400">BET</div>
-          <div className="text-2xl font-bold">${currentBet.toFixed(2)}</div>
+          <button
+            className="icon-button"
+            onClick={onToggleSound}
+            aria-label={soundEnabled ? 'Mute sound' : 'Unmute sound'}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M5.5 10.5L5.5 7.5L5.5 3.5L3 5.5H2C1.72 5.5 1.5 5.72 1.5 6V8C1.5 8.28 1.72 8.5 2 8.5H3L5.5 10.5Z" fill="#9F9F9F"/>
+              {soundEnabled ? (
+                <>
+                  <path d="M7.5 9.5C8.9 8.06 8.9 5.8 7.5 4.5" stroke="#9F9F9F" strokeWidth="1.2" strokeLinecap="round"/>
+                  <path d="M9.5 11.5C12 8.93 12 5.07 9.5 2.5" stroke="#9F9F9F" strokeWidth="1.2" strokeLinecap="round"/>
+                </>
+              ) : (
+                <path d="M8 5L12 9M12 5L8 9" stroke="#9F9F9F" strokeWidth="1.2" strokeLinecap="round"/>
+              )}
+            </svg>
+          </button>
         </div>
 
-        {/* Bet Increase Button */}
-        <button
-          onClick={onBetIncrease}
-          disabled={isSpinning}
-          className="w-12 h-12 rounded-full bg-gray-500 hover:bg-gray-400 disabled:bg-gray-600 flex items-center justify-center border-2 border-gray-700 transition text-white font-bold text-xl"
-          title="Increase Bet"
-        >
-          +
-        </button>
-
-        {/* Bet Decrease Button */}
-        <button
-          onClick={onBetDecrease}
-          disabled={isSpinning}
-          className="w-12 h-12 rounded-full bg-gray-500 hover:bg-gray-400 disabled:bg-gray-600 flex items-center justify-center border-2 border-gray-700 transition text-white font-bold text-xl"
-          title="Decrease Bet"
-        >
-          −
+        {/* Info */}
+        <button className="info-button" onClick={onInfo} aria-label="Information">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M10 14.5V9.5H13V14.5H10ZM11.5 8.2C11.1 8.2 10.75 8.07 10.46 7.8C10.18 7.53 10.04 7.21 10.04 6.84C10.04 6.47 10.18 6.15 10.46 5.88C10.75 5.61 11.1 5.48 11.5 5.48C11.9 5.48 12.25 5.61 12.53 5.88C12.82 6.15 12.96 6.47 12.96 6.84C12.96 7.21 12.82 7.53 12.53 7.8C12.25 8.07 11.9 8.2 11.5 8.2Z" fill="#9F9F9F"/>
+          </svg>
         </button>
       </div>
 
-      {/* Right Section: Spin and AutoSpin */}
-      <div className="flex items-center gap-4">
-        {/* Main Spin Button */}
+      {/* Центральная группа: CREDIT и BET */}
+      <div className="center-group">
+        {/* CREDIT */}
+        <div className="info-block">
+          <span className="info-label">CREDIT</span>
+          <span className="info-value">{formatMoney(balance)}</span>
+        </div>
+
+        {/* BET */}
+        <div className="info-block">
+          <span className="info-label">BET</span>
+          <div className="bet-block">
+            <span className="bet-value">{formatMoney(currentBet)}</span>
+
+          <div className="btngrup">
+            <button
+              className="bet-adjust-button"
+              onClick={onBetIncrease}
+              disabled={isSpinning}
+              aria-label="Increase bet"
+            >
+              +
+            </button>
+            <button
+              className="bet-adjust-button"
+              onClick={onBetDecrease}
+              disabled={isSpinning}
+              aria-label="Decrease bet"
+            >
+              −
+            </button>
+          </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Правая группа: Spin + авто */}
+      <div className="right-group">
         <button
+          className={`spin-button ${isSpinning ? 'spin-button--spinning' : ''}`}
           onClick={onSpin}
           disabled={isSpinning}
-          className="w-20 h-20 rounded-full bg-gradient-to-b from-gray-400 to-gray-600 hover:from-gray-300 hover:to-gray-500 disabled:from-gray-500 disabled:to-gray-700 flex items-center justify-center border-4 border-white shadow-lg transition transform hover:scale-105 active:scale-95"
-          title="Spin"
+          aria-label="Spin"
         >
-          <div className="w-16 h-16 rounded-full bg-gradient-to-b from-white to-gray-300 flex items-center justify-center border-2 border-gray-400">
-            <svg className="w-10 h-10 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z" />
-            </svg>
-          </div>
+          <ImSpinner11 />
         </button>
 
-        {/* AutoSpin Button */}
         <button
+          className="auto-button"
           onClick={onAutoSpin}
           disabled={isSpinning}
-          className="w-12 h-12 rounded-full bg-gray-500 hover:bg-gray-400 disabled:bg-gray-600 flex items-center justify-center border-2 border-gray-700 transition"
-          title="AutoSpin"
+          aria-label="Auto spin"
         >
-          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M7 10l5 5 5-5z" />
-          </svg>
+          <MdOutlineMotionPhotosAuto />
         </button>
       </div>
     </div>

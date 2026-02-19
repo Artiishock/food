@@ -1,0 +1,5 @@
+.loading-container {
+  text-align: center;
+  padding: 2rem; /* соответствует p-8 */
+  font-family: sans-serif; /* опционально */
+}

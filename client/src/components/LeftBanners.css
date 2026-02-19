@@ -1,0 +1,121 @@
+/* LeftBanners.css */
+
+.banner-card {
+  background-color: #ffffff;
+  padding: 1.5rem;        /* p-6 */
+  border-radius: 0.5rem;  /* rounded-lg */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+  height: 8rem;           /* h-32 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.banner-title {
+  font-size: 0.875rem;    /* text-sm */
+  font-weight: 700;       /* font-bold */
+  color: #374151;         /* text-gray-700 */
+  margin-bottom: 0.5rem;  /* добавлено для отступа, если нужно */
+}
+
+/* Кнопки покупки FS */
+.buy-button {
+  margin-top: 0.5rem;     /* mt-2 */
+  font-size: 0.75rem;     /* text-xs */
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.375rem; /* rounded (умолчание) */
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.buy-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.buy-button.cheap {
+  background-color: #3b82f6; /* bg-blue-500 */
+}
+
+.buy-button.cheap:hover:not(:disabled) {
+  background-color: #2563eb; /* hover:bg-blue-600 */
+}
+
+.buy-button.standard {
+  background-color: #22c55e; /* bg-green-500 */
+}
+
+.buy-button.standard:hover:not(:disabled) {
+  background-color: #16a34a; /* hover:bg-green-600 */
+}
+
+/* Группа кнопок анте */
+.ante-group {
+  display: flex;
+  gap: 0.5rem;            /* gap-2 */
+  flex-direction: column;
+}
+
+.ante-button {
+  font-size: 0.75rem;     /* text-xs */
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  text-align: center;
+}
+
+.ante-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ante-button--active {
+  background-color: #3b82f6; /* bg-blue-500 (default) */
+  color: #ffffff;
+  border: 1px solid #3b82f6;
+}
+
+.ante-button--active:hover:not(:disabled) {
+  background-color: #2563eb; /* hover:bg-blue-600 */
+  border-color: #2563eb;
+}
+
+.ante-button--inactive {
+  background-color: transparent;
+  color: #374151;          /* text-gray-700 */
+  border: 1px solid #d1d5db; /* border-gray-300 (пример) */
+}
+
+.ante-button--inactive:hover:not(:disabled) {
+  background-color: #f3f4f6; /* hover:bg-gray-100 */
+  border-color: #9ca3af;
+}
+
+/* Баннер бесплатных спинов */
+.free-spins-banner {
+  background-color: #fde047; /* bg-yellow-300 */
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  height: 8rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 2px solid #eab308; /* border-yellow-500 */
+}
+
+.free-spins-title {
+  font-size: 1.125rem;    /* text-lg */
+  font-weight: 700;
+  color: #1f2937;         /* text-gray-800 */
+}
+
+.free-spins-count {
+  font-size: 1.5rem;      /* text-2xl */
+  font-weight: 700;
+  color: #1f2937;
+  margin-top: 0.5rem;     /* mt-2 */
+}

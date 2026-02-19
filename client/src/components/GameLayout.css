@@ -1,0 +1,90 @@
+/* GameLayout.css */
+
+.layout {
+  min-height: 100vh;
+  background-color: #d1d5db; /* bg-gray-300 */
+  display: flex;
+  flex-direction: column;
+}
+
+.main-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;           /* gap-6 */
+  padding: 10rem 20rem;       /* p-6 */
+  padding-bottom: 8rem;  /* pb-32 (32 * 0.25rem = 8rem) */
+  height: 516px;
+}
+
+/* Левая колонка (баннеры) */
+.left-column {
+  width: 12rem;  
+  height: 516px !important ;    
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;             /* gap-4 */
+}
+
+/* Центральная колонка (игровое поле) */
+.center-column {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: fit-content !important;
+}
+
+/* Карточка игрового поля */
+.game-board-card {
+  background-color: #ffffff; /* bg-white */
+  padding: 0.5rem;           /* p-2 */
+  border-radius: 0.5rem;     /* rounded-lg */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+}
+
+/* Правая колонка (логотип и заказы) */
+.right-column {
+  width: 12rem;          /* w-48 */
+    height: 516px !important ; 
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;             /* gap-4 */
+}
+
+/* Блок логотипа */
+.logo-box {
+  background-color: #3d3434;
+  padding: 1.5rem;           /* p-6 */
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  height: 8rem;              /* h-32 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Блок заказов */
+.orders-box {
+    height: 80% !important;
+  background-color: #554c4c;
+  padding: 1rem;             /* p-4 */
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  flex: 1;
+  overflow-y: scroll;
+
+}
+  ::-webkit-scrollbar{
+    display: none;
+  }
+/* Заголовок внутри блока заказов */
+.orders-title {
+  font-size: 0.875rem;       /* text-sm */
+  font-weight: 700;          /* font-bold */
+  margin-bottom: 0.5rem;     /* mb-2 */
+  color: #000;
+}

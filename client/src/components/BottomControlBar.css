@@ -1,0 +1,211 @@
+.bottom-control-bar {
+  position: relative;
+  width: 100%;
+  height: 80px;
+  background: linear-gradient(to top, rgba(6,6,6,0.9) 0%, rgba(6,6,6,0) 100%);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  box-sizing: border-box;
+  gap: 0;
+}
+
+/* Левая группа кнопок */
+.left-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Стек для Settings и Sound */
+.icon-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Базовая круглая кнопка */
+.icon-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid #9F9F9F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Большая кнопка Info */
+.info-button {
+  width: 49px;
+  height: 49px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid #9F9F9F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  
+}
+
+/* Центральная область с кредитами и ставкой */
+.center-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between ;
+  gap: 48px;
+  padding: 0px 50px ;
+}
+
+/* Общий стиль для блоков CREDIT и BET */
+.info-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  line-height: 1;
+}
+
+
+
+.info-label {
+  font-family: sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #FACB32;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+ 
+  justify-content: start;
+}
+
+.info-label_bet {
+  font-family: sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #FACB32;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+  display: flex;
+  justify-content: start;
+}
+
+.info-value {
+  font-family: sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+}
+
+/* Блок ставки (с кнопками +/‑) */
+.bet-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bet-value {
+  font-family: sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+  min-width: 90px;
+  text-align: center;
+}
+
+/* Кнопки увеличения/уменьшения ставки */
+.bet-adjust-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid #666;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.bet-adjust-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Правая группа */
+.right-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+
+
+/* Большая кнопка SPIN */
+.spin-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #555 0%, #1a1a1a 100%);
+  border: 2px solid #555;
+  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s;
+  box-shadow: 0 0 12px rgba(0,0,0,0.6);
+}
+
+.spin-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Состояние spin-кнопки при вращении (перекрывает обычный фон) */
+.spin-button--spinning {
+  background: rgba(30,30,30,0.8);
+}
+
+/* Маленькая кнопка авто/стрелка */
+.auto-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid #9F9F9F;
+  font-size: 28px ;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auto-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
