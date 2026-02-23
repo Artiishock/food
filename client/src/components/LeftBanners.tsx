@@ -1,5 +1,5 @@
-import React from 'react';
-import './LeftBanners.css'; // импорт стилей
+import React, { useState } from 'react';
+import './LeftBanners.css';
 
 interface LeftBannersProps {
   isFreeSpins: boolean;
@@ -18,73 +18,77 @@ export default function LeftBanners({
   onAnteChange,
   isSpinning,
 }: LeftBannersProps) {
+  // Track which banner triggered the FS purchase so the status shows there
+  const [fsBoughtFrom, setFsBoughtFrom] = useState<'cheap' | 'standard' | null>(null);
+
+  const handleBuyFS = (type: 'cheap' | 'standard') => {
+    setFsBoughtFrom(type);
+    onBuyFreeSpins(type);
+  };
+
+  const showFsInStandard = isFreeSpins && fsBoughtFrom === 'standard';
+  const showFsInCheap = isFreeSpins && fsBoughtFrom === 'cheap';
+
+  const anteEnabled = anteMode === 'low';
+
   return (
     <>
-      {/* FS Cheap Package Banner */}
-      <div className="banner-card">
-        <div className="banner-title">Баннер дорого пакета FS</div>
-        <button
-          className="buy-button cheap"
-          onClick={() => onBuyFreeSpins('cheap')}
-          disabled={isSpinning || isFreeSpins}
-        >
-          CHEAP (50x) - 5 FS
-        </button>
-      </div>
-
-      {/* FS Expensive Package Banner */}
-      <div className="banner-card">
-        <div className="banner-title">Баннер дешевого пакета FS</div>
-        <button
-          className="buy-button standard"
-          onClick={() => onBuyFreeSpins('standard')}
-          disabled={isSpinning || isFreeSpins}
-        >
-          STANDARD (100x) - 10 FS
-        </button>
-      </div>
-
-      {/* Ante Mode Banner */}
-      <div className="banner-card">
-        <div className="banner-title">Вкл/Выкл ставки Анте</div>
-        <div className="ante-group">
-          <button
-            className={`ante-button ${
-              anteMode === 'none' ? 'ante-button--active' : 'ante-button--inactive'
-            }`}
-            onClick={() => onAnteChange('none')}
-            disabled={isSpinning}
-          >
-            NORMAL
-          </button>
-          <button
-            className={`ante-button ${
-              anteMode === 'low' ? 'ante-button--active' : 'ante-button--inactive'
-            }`}
-            onClick={() => onAnteChange('low')}
-            disabled={isSpinning}
-          >
-            LOW 1.25x
-          </button>
-          <button
-            className={`ante-button ${
-              anteMode === 'high' ? 'ante-button--active' : 'ante-button--inactive'
-            }`}
-            onClick={() => onAnteChange('high')}
-            disabled={isSpinning}
-          >
-            HIGH 5x
-          </button>
-        </div>
-      </div>
-
-      {/* Free Spins Status */}
-      {isFreeSpins && (
+      {/* Standard (expensive) package — 10 FS */}
+      {showFsInStandard ? (
         <div className="free-spins-banner">
           <div className="free-spins-title">FREE SPINS</div>
           <div className="free-spins-count">{freeSpinsRemaining}</div>
         </div>
+      ) : (
+        <div className="banner-card">
+          <div className="banner-title">Standard FS Package</div>
+          <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>10 free spins</div>
+          <button
+            className="buy-button standard"
+            onClick={() => handleBuyFS('standard')}
+            disabled={isSpinning || isFreeSpins}
+          >
+            BUY (100×) — 10 FS
+          </button>
+        </div>
       )}
+
+      {/* Cheap package — 5 FS */}
+      {showFsInCheap ? (
+        <div className="free-spins-banner">
+          <div className="free-spins-title">FREE SPINS</div>
+          <div className="free-spins-count">{freeSpinsRemaining}</div>
+        </div>
+      ) : (
+        <div className="banner-card">
+          <div className="banner-title">Cheap FS Package</div>
+          <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>5 free spins</div>
+          <button
+            className="buy-button cheap"
+            onClick={() => handleBuyFS('cheap')}
+            disabled={isSpinning || isFreeSpins}
+          >
+            BUY (50×) — 5 FS
+          </button>
+        </div>
+      )}
+
+      {/* Ante Mode — toggle switch ×1 / ×1.25 */}
+      <div className="banner-card">
+        <div className="banner-title">Ante Bet</div>
+        <div className="ante-toggle-row">
+          <span className={`ante-label ${!anteEnabled ? 'ante-label--active' : ''}`}>×1</span>
+          <button
+            className={`ante-switch ${anteEnabled ? 'ante-switch--on' : 'ante-switch--off'}`}
+            onClick={() => onAnteChange(anteEnabled ? 'none' : 'low')}
+            disabled={isSpinning}
+            aria-label="Toggle ante bet"
+          >
+            <span className="ante-switch-thumb" />
+          </button>
+          <span className={`ante-label ${anteEnabled ? 'ante-label--active' : ''}`}>×1.25</span>
+        </div>
+      </div>
     </>
   );
 }

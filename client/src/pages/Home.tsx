@@ -23,6 +23,10 @@ export default function Home() {
   const [superBonusAmount, setSuperBonusAmount] = useState(0);
   // ════════════════════════════════════════
   
+
+// 1. Новый state рядом с остальными:
+const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
+
   const handleSpin = async () => {
     if (isSpinning) return;
     
@@ -119,7 +123,9 @@ export default function Home() {
           <GameCanvas
             gameEngine={gameEngine}
             isSpinning={isSpinning}
+            soundEnabled={soundEnabled}
             onSpinComplete={handleSpinComplete}
+            onSpeedUpReady={(fn) => setOnSpeedUp(() => fn)} 
           />
         }
         leftBanners={
@@ -145,6 +151,7 @@ export default function Home() {
             onInfo={() => console.log('Info')}
             soundEnabled={soundEnabled}
             onToggleSound={() => setSoundEnabled(!soundEnabled)}
+            onSpeedUp={onSpeedUp ?? undefined} 
           />
         }
       />

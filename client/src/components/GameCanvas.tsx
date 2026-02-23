@@ -7,7 +7,9 @@ import symbolsConfig from '../config/symbols.json';
 interface GameCanvasProps {
   gameEngine: GameEngine;
   isSpinning?: boolean;
+  soundEnabled?: boolean;
   onSpinComplete?: (result: any) => void;
+  onSpeedUpReady?: (speedUp: () => void) => void;  // колбэк для получения функции ускорения
 }
 
 const CANVAS_W = 800;
@@ -55,17 +57,48 @@ interface Reel {
   spinning:  boolean;
 }
 
-export default function GameCanvas({ gameEngine, isSpinning = false, onSpinComplete }: GameCanvasProps) {
-  const mountRef   = useRef<HTMLDivElement>(null);
-  const appRef     = useRef<PIXI.Application | null>(null);
-  const reelsRef   = useRef<Reel[]>([]);
-  const fxLayerRef = useRef<PIXI.Container | null>(null);
-  const textureMap = useRef<Map<string, PIXI.Texture>>(new Map());
-  const busyRef    = useRef(false);
-  const { play }   = useGameSounds();
-  const stopSpin   = useRef<(() => void) | null>(null);
+export default function GameCanvas({ gameEngine, isSpinning = false, soundEnabled = true, onSpinComplete, onSpeedUpReady }: GameCanvasProps) {
+  const mountRef      = useRef<HTMLDivElement>(null);
+  const appRef        = useRef<PIXI.Application | null>(null);
+  const reelsRef      = useRef<Reel[]>([]);
+  const fxLayerRef    = useRef<PIXI.Container | null>(null);
+  const textureMap    = useRef<Map<string, PIXI.Texture>>(new Map());
+  const busyRef       = useRef(false);
+  const { play, setMuted } = useGameSounds();
+  const stopSpin      = useRef<(() => void) | null>(null);
+  const speedMultRef  = useRef(1);   // 1 = нормально, 3 = ускорено
   const [ready, setReady] = useState(false);
   const [err,   setErr  ] = useState<string | null>(null);
+
+  // Синхронизируем mute с пропсом
+  useEffect(() => {
+    setMuted(!soundEnabled);
+  }, [soundEnabled]);
+
+  // Функция ускорения — вызывается кнопкой или пробелом
+  const speedUp = useCallback(() => {
+    if (!busyRef.current) return;
+    speedMultRef.current = speedMultRef.current === 1 ? 4 : 1;
+  }, []);
+
+  // Передаём функцию ускорения родителю
+  useEffect(() => {
+    onSpeedUpReady?.(speedUp);
+  }, [speedUp, onSpeedUpReady]);
+
+  // Слушаем пробел
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && e.target === document.body) {
+        e.preventDefault();
+        if (busyRef.current) {
+          speedUp();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [speedUp]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -183,6 +216,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
   const runSpinSequence = async (initialGrid: GridCell[][], cascadeSteps: any[]) => {
     busyRef.current = true;
+    speedMultRef.current = 1;  // сбрасываем скорость перед каждым спином
     // Запускаем звук вращения
     stopSpin.current = play('spin') ?? null;
     try {
@@ -240,7 +274,8 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
       let elapsed      = 0;
 
       const tick = (ticker: PIXI.Ticker) => {
-        elapsed += ticker.deltaTime * (1000 / 60);
+        const spd = speedMultRef.current;
+        elapsed += ticker.deltaTime * (1000 / 60) * spd;
         let allStopped = true;
 
         for (let col = 0; col < COLS; col++) {
@@ -252,7 +287,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
           // Начинаем торможение
           if (elapsed >= stopAt) {
-            vel[col] = Math.max(0, vel[col] - DECEL);
+            vel[col] = Math.max(0, vel[col] - DECEL * spd);
 
             // Фиксируем snap-target один раз в начале торможения
             if (snapTarget[col] < 0) {
@@ -295,7 +330,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
           }
 
           // Скорость: минимум при докрутке чтобы не ползти
-          const SNAP_MIN = SPIN_SPEED * 0.35;
+          const SNAP_MIN = SPIN_SPEED * 0.35 * spd;
           const effectiveV = (snapTarget[col] >= 0 && v < SNAP_MIN) ? SNAP_MIN : v;
           const step = Math.min(effectiveV, remaining < Infinity ? remaining : effectiveV);
 
@@ -348,7 +383,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     await highlightCells(winPositions);
     await explodeCells(winPositions);
     await dropAndFill(step.gridAfterFill as GridCell[][], step.gridBeforeRemoval as GridCell[][], winPositions);
-    await sleep(180);
+    await sleep(180 / speedMultRef.current);
   };
 
   // Победная анимация: увеличение → полёт вниз к центру нижней панели → исчезновение
@@ -356,6 +391,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
     new Promise(resolve => {
       const app = appRef.current!;
       const fx  = fxLayerRef.current!;
+      const spd = speedMultRef.current;
 
       // Центр нижней панели в координатах canvas
       // Нижняя панель: Y = CANVAS_H (сразу под canvas), центр X = CANVAS_W / 2
@@ -406,8 +442,8 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
         items.push({ sprite, bg, startX, startY, baseScale: slot.sprite.scale.x, phase: 'grow', t: 0, done: false });
       });
 
-      const GROW_DUR = 400;  // ms — фаза увеличения с подсветкой
-      const FLY_DUR  = 500;  // ms — фаза полёта вниз
+      const GROW_DUR = 400 / spd;  // ms — фаза увеличения с подсветкой
+      const FLY_DUR  = 500 / spd;  // ms — фаза полёта вниз
 
       const tick = (ticker: PIXI.Ticker) => {
         const dt = ticker.deltaTime * (1000 / 60);
@@ -558,11 +594,12 @@ export default function GameCanvas({ gameEngine, isSpinning = false, onSpinCompl
 
       if (items.length === 0) { resolve(); return; }
 
+      const spd2 = speedMultRef.current;
       const tick = (ticker: PIXI.Ticker) => {
         let allDone = true;
         items.forEach(item => {
           if (item.landed) return;
-          item.vy += GRAVITY;
+          item.vy += GRAVITY * spd2;
           item.slot.container.y += item.vy;
           if (item.slot.container.y >= item.targetY) {
             item.slot.container.y = item.targetY;

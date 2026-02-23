@@ -209,3 +209,116 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* Кнопка SPIN в режиме быстрой скорости */
+.spin-button--fast {
+  background: radial-gradient(circle at 40% 35%, #f39c12 0%, #8a5a00 100%) !important;
+  border-color: #f39c12 !important;
+  box-shadow: 0 0 16px rgba(243, 156, 18, 0.5) !important;
+}
+
+.speed-btn-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1;
+}
+
+.speed-label {
+  font-size: 9px;
+  font-weight: 900;
+  color: #fff;
+}
+
+/* Авто кнопка */
+.auto-spin-wrapper {
+  position: relative;
+}
+
+.auto-button--active {
+  background: rgba(192, 57, 43, 0.25) !important;
+  border-color: #c0392b !important;
+  color: #c0392b !important;
+}
+
+.auto-stop-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+}
+
+.auto-stop-count {
+  font-size: 9px;
+  font-weight: 900;
+  color: currentColor;
+}
+
+/* Выпадающее меню */
+.auto-spin-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  background: rgba(12, 12, 20, 0.98);
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 4px 0;
+  min-width: 130px;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  animation: menuAppear 0.15s ease;
+}
+
+@keyframes menuAppear {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.auto-spin-menu__title {
+  color: #FACB32;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 14px 8px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.auto-spin-menu__item {
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.1s;
+}
+
+.auto-spin-menu__item:hover {
+  background: rgba(250, 203, 50, 0.1);
+  color: #FACB32;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
