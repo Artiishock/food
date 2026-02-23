@@ -43,6 +43,8 @@ export interface CascadeStep {
   gridAfterFill: GridCell[][];
 }
 
+export type BonusType = 'none' | 'order' | 'mini' | 'big';
+
 export interface GameState {
   grid: GridCell[][];
   balance: number;
@@ -54,19 +56,24 @@ export interface GameState {
   orders: Order[];
   anteMode: 'none' | 'low' | 'high';
   cascadeSteps: CascadeStep[];
+  lastScatterCount: number;
+  lastBonusType: BonusType;
 }
 
 export class GameEngine {
   private state: GameState;
   private symbols: Symbol[];
-  // Предвычисленные массивы для быстрого доступа
   private foodSymbols: Symbol[];
   private foodTotalWeight: number;
+  private allSymbols: Symbol[];
+  private allTotalWeight: number;
 
   constructor() {
     this.symbols = symbolsConfig.symbols as Symbol[];
     this.foodSymbols = this.symbols.filter(s => !s.isScatter);
     this.foodTotalWeight = this.foodSymbols.reduce((sum, s) => sum + s.weight, 0);
+    this.allSymbols = this.symbols;
+    this.allTotalWeight = this.allSymbols.reduce((sum, s) => sum + s.weight, 0);
     this.state = this.initializeState();
   }
 
@@ -81,17 +88,22 @@ export class GameEngine {
       freeSpinsRemaining: 0,
       orders: [],
       anteMode: 'none',
-      cascadeSteps: []
+      cascadeSteps: [],
+      lastScatterCount: 0,
+      lastBonusType: 'none',
     };
   }
 
+  /**
+   * Генерирует начальную сетку — включает scatter с его весом (~9.2% per cell)
+   */
   private generateInitialGrid(): GridCell[][] {
     const grid: GridCell[][] = [];
     for (let row = 0; row < symbolsConfig.gridSize.rows; row++) {
       grid[row] = [];
       for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
         grid[row][col] = {
-          symbol: this.getRandomFoodSymbol(),
+          symbol: this.getRandomSymbolWithScatter(),
           row,
           col,
           id: `cell-${row}-${col}-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -102,42 +114,38 @@ export class GameEngine {
   }
 
   /**
-   * Возвращает случайный символ еды (без scatter).
-   * Использует предвычисленный список и общий вес для корректного взвешенного выбора.
-   * Гарантирует возврат символа даже при edge cases с floating point.
+   * Случайный символ еды (без scatter) — для заполнения после каскада
    */
   private getRandomFoodSymbol(): Symbol {
     const roll = Math.random() * this.foodTotalWeight;
     let accumulated = 0;
-
     for (let i = 0; i < this.foodSymbols.length; i++) {
       accumulated += this.foodSymbols[i].weight;
-      if (roll < accumulated) {
-        // Глубокое клонирование чтобы каждая ячейка имела свой объект символа
-        return { ...this.foodSymbols[i] };
-      }
+      if (roll < accumulated) return { ...this.foodSymbols[i] };
     }
-
-    // Fallback: последний символ (не первый!) — так распределение точнее
     return { ...this.foodSymbols[this.foodSymbols.length - 1] };
   }
 
   /**
-   * Возвращает случайный символ включая scatter (для проверки триггера)
+   * Случайный символ включая scatter — для начальной генерации сетки.
+   * Вероятность scatter = 12 / 126 ≈ 0.0952 ≈ 9.5%
    */
   private getRandomSymbolWithScatter(): Symbol {
-    const total = this.symbols.reduce((sum, s) => sum + s.weight, 0);
-    const roll = Math.random() * total;
+    const roll = Math.random() * this.allTotalWeight;
     let accumulated = 0;
-
-    for (let i = 0; i < this.symbols.length; i++) {
-      accumulated += this.symbols[i].weight;
-      if (roll < accumulated) {
-        return { ...this.symbols[i] };
-      }
+    for (let i = 0; i < this.allSymbols.length; i++) {
+      accumulated += this.allSymbols[i].weight;
+      if (roll < accumulated) return { ...this.allSymbols[i] };
     }
+    return { ...this.allSymbols[this.allSymbols.length - 1] };
+  }
 
-    return { ...this.symbols[this.symbols.length - 1] };
+  /**
+   * Случайный множитель чаевых x2–x10
+   */
+  private getRandomTipMultiplier(): number {
+    const multipliers = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+    return multipliers[Math.floor(Math.random() * multipliers.length)];
   }
 
   public getState(): GameState {
@@ -174,17 +182,20 @@ export class GameEngine {
     this.state.isSpinning = true;
     this.state.totalWin = 0;
     this.state.cascadeSteps = [];
+    this.state.lastBonusType = 'none';
+    this.state.lastScatterCount = 0;
 
+    // Сбрасываем заказы нормального режима (не фриспины)
     if (!this.state.isFreeSpins) {
       this.state.orders = [];
-      this.generateOrder();
     }
 
     this.state.grid = this.generateInitialGrid();
 
     const result = await this.processCascades();
 
-    this.checkFreeSpinsTrigger();
+    // Проверяем scatter и генерируем заказы/бонусы
+    this.checkScatterAndOrders();
 
     this.state.balance += result.totalWin;
     this.state.totalWin = result.totalWin;
@@ -210,10 +221,7 @@ export class GameEngine {
 
     while (true) {
       const wins = this.findWinningCombinations(this.state.grid);
-
-      if (wins.length === 0) {
-        break;
-      }
+      if (wins.length === 0) break;
 
       cascadeCount++;
 
@@ -246,76 +254,106 @@ export class GameEngine {
   }
 
   /**
-   * ИСПРАВЛЕННАЯ победная логика.
-   *
-   * Алгоритм:
-   * 1. Сканируем всю сетку
-   * 2. Группируем ячейки строго по symbol.id (строковый ключ)
-   * 3. Группы с 8+ ячейками = победа
-   *
-   * Защиты:
-   * - Пропускаем null/undefined ячейки
-   * - Пропускаем ячейки без symbol или с пустым id
-   * - Пропускаем scatter символы
-   * - Клонируем ячейки перед добавлением в группу
+   * Считаем scatter и применяем правила:
+   * 1–3 scatter → 1 заказ
+   * 4 scatter → мини-бонус (3 заказа + 5 фриспинов)
+   * 5+ scatter → большой бонус (5 заказов + 10 фриспинов)
    */
+  private checkScatterAndOrders(): void {
+    let scatterCount = 0;
+    for (let row = 0; row < this.state.grid.length; row++) {
+      for (let col = 0; col < this.state.grid[row].length; col++) {
+        const cell = this.state.grid[row][col];
+        if (cell?.symbol?.isScatter) scatterCount++;
+      }
+    }
+
+    this.state.lastScatterCount = scatterCount;
+
+    if (this.state.isFreeSpins) {
+      // Во фриспинах scatter не даёт новых бонусов, заказы уже активны
+      return;
+    }
+
+    if (scatterCount >= 5) {
+      // Большой бонус — 10 фриспинов + 5 заказов
+      this.state.lastBonusType = 'big';
+      this.triggerBigBonus();
+    } else if (scatterCount === 4) {
+      // Мини-бонус — 5 фриспинов + 3 заказа
+      this.state.lastBonusType = 'mini';
+      this.triggerMiniBonus();
+    } else if (scatterCount >= 1) {
+      // 1–3 scatter → 1 заказ (без фриспинов)
+      this.state.lastBonusType = 'order';
+      this.generateOrdersFromScatter(1);
+    }
+  }
+
+  /**
+   * Генерирует N заказов на основе scatter.
+   * Символ — случайная еда (не scatter), количество 10–20, чаевые x2–x10
+   */
+  private generateOrdersFromScatter(count: number): void {
+    this.state.orders = [];
+    for (let i = 0; i < count; i++) {
+      const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
+      const quantity = Math.floor(Math.random() * 11) + 10; // 10–20
+      const tipMultiplier = this.getRandomTipMultiplier(); // x2–x10
+
+      this.state.orders.push({
+        symbolId: symbol.id,
+        quantity,
+        collected: 0,
+        tipMultiplier,
+        completed: false
+      });
+    }
+  }
+
+  /**
+   * Мини-бонус: 5 фриспинов, 3 заказа
+   */
+  private triggerMiniBonus(): void {
+    this.state.isFreeSpins = true;
+    this.state.freeSpinsRemaining = 5;
+    this.generateOrdersFromScatter(3);
+  }
+
+  /**
+   * Большой бонус: 10 фриспинов, 5 заказов
+   */
+  private triggerBigBonus(): void {
+    this.state.isFreeSpins = true;
+    this.state.freeSpinsRemaining = 10;
+    this.generateOrdersFromScatter(5);
+  }
+
   private findWinningCombinations(grid: GridCell[][]): WinInfo[] {
     const ROWS = symbolsConfig.gridSize.rows;
     const COLS = symbolsConfig.gridSize.columns;
-
-    // Map: symbolId → список ячеек с этим символом
     const groups = new Map<string, GridCell[]>();
 
     for (let row = 0; row < ROWS; row++) {
       if (!grid[row]) continue;
-
       for (let col = 0; col < COLS; col++) {
         const cell = grid[row][col];
-
-        // Защита от null/undefined
         if (cell == null) continue;
         if (!cell.symbol) continue;
-
         const sid = cell.symbol.id;
-
-        // Защита от невалидного id
         if (typeof sid !== 'string' || sid === '') continue;
-
-        // Scatter не участвует в победных комбинациях
-        if (cell.symbol.isScatter) continue;
-
-        if (!groups.has(sid)) {
-          groups.set(sid, []);
-        }
-
-        // Клонируем ячейку чтобы последующие мутации не сломали результат
-        groups.get(sid)!.push({
-          symbol: { ...cell.symbol },
-          row: cell.row,
-          col: cell.col,
-          id: cell.id,
-        });
+        if (cell.symbol.isScatter) continue; // scatter не участвует в комбинациях
+        if (!groups.has(sid)) groups.set(sid, []);
+        groups.get(sid)!.push({ symbol: { ...cell.symbol }, row: cell.row, col: cell.col, id: cell.id });
       }
     }
 
     const wins: WinInfo[] = [];
-
     groups.forEach((cells, symbolId) => {
       if (cells.length < symbolsConfig.minWinSymbols) return;
-
-      // Ищем определение символа
       const symbolDef = this.foodSymbols.find(s => s.id === symbolId);
-      if (!symbolDef) {
-        console.warn(`Win detection: unknown symbol id "${symbolId}"`);
-        return;
-      }
-
-      wins.push({
-        symbol: { ...symbolDef },
-        cells,
-        count: cells.length,
-        payout: 0,
-      });
+      if (!symbolDef) return;
+      wins.push({ symbol: { ...symbolDef }, cells, count: cells.length, payout: 0 });
     });
 
     return wins;
@@ -323,11 +361,9 @@ export class GameEngine {
 
   private calculatePayout(symbol: Symbol, count: number): number {
     if (!symbol.payouts) return 0;
-
     if (count >= 12) return symbol.payouts['12+'] ?? 0;
     if (count >= 10) return symbol.payouts['10-11'] ?? 0;
     if (count >= 8)  return symbol.payouts['8-9'] ?? 0;
-
     return 0;
   }
 
@@ -342,10 +378,7 @@ export class GameEngine {
   private removeWinningSymbols(wins: WinInfo[]): void {
     for (const win of wins) {
       for (const cell of win.cells) {
-        if (
-          this.state.grid[cell.row] != null &&
-          this.state.grid[cell.row][cell.col] != null
-        ) {
+        if (this.state.grid[cell.row] != null && this.state.grid[cell.row][cell.col] != null) {
           (this.state.grid[cell.row][cell.col] as any) = null;
         }
       }
@@ -354,22 +387,14 @@ export class GameEngine {
 
   private dropSymbols(): void {
     for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
-      // Собираем ненулевые ячейки снизу вверх
       const survivors: GridCell[] = [];
-
       for (let row = symbolsConfig.gridSize.rows - 1; row >= 0; row--) {
         const cell = this.state.grid[row][col];
-        if (cell != null && cell.symbol) {
-          survivors.push(cell);
-        }
+        if (cell != null && cell.symbol) survivors.push(cell);
       }
-
-      // Очищаем всю колонку
       for (let row = 0; row < symbolsConfig.gridSize.rows; row++) {
         (this.state.grid[row][col] as any) = null;
       }
-
-      // Расставляем выжившие ячейки снизу вверх
       let writeRow = symbolsConfig.gridSize.rows - 1;
       for (const cell of survivors) {
         cell.row = writeRow;
@@ -396,107 +421,18 @@ export class GameEngine {
     }
   }
 
-  /**
-   * Клонирование сетки.
-   * Правильно обрабатывает null ячейки внутри строк.
-   */
   private cloneGrid(grid: GridCell[][]): GridCell[][] {
     return grid.map(row =>
       row.map(cell => {
         if (cell == null) return null as any;
-        return {
-          ...cell,
-          symbol: { ...cell.symbol }
-        };
+        return { ...cell, symbol: { ...cell.symbol } };
       })
     );
   }
 
-  private checkFreeSpinsTrigger(): void {
-    let scatterCount = 0;
-
-    for (let row = 0; row < this.state.grid.length; row++) {
-      for (let col = 0; col < this.state.grid[row].length; col++) {
-        const cell = this.state.grid[row][col];
-        if (cell && cell.symbol && cell.symbol.isScatter) {
-          scatterCount++;
-        }
-      }
-    }
-
-    let scatterTrigger = gameConfig.freeSpins.scatterTrigger;
-    if (this.state.anteMode === 'low') {
-      scatterTrigger = Math.max(1, Math.floor(scatterTrigger / gameConfig.anteMode.lowAnteScatterBoost));
-    } else if (this.state.anteMode === 'high') {
-      scatterTrigger = Math.max(1, Math.floor(scatterTrigger / gameConfig.anteMode.highAnteScatterBoost));
-    }
-
-    if (scatterCount >= scatterTrigger && !this.state.isFreeSpins) {
-      this.triggerFreeSpins();
-    }
-  }
-
-  private triggerFreeSpins(): void {
-    this.state.isFreeSpins = true;
-    this.state.freeSpinsRemaining = gameConfig.freeSpins.spinsAwarded;
-
-    const orderCount = Math.floor(
-      Math.random() *
-      (gameConfig.orders.freeSpinsMode.maxOrders - gameConfig.orders.freeSpinsMode.minOrders + 1)
-    ) + gameConfig.orders.freeSpinsMode.minOrders;
-
-    this.state.orders = [];
-
-    for (let i = 0; i < orderCount; i++) {
-      const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
-      const quantity = Math.floor(
-        Math.random() *
-        (gameConfig.orders.freeSpinsMode.maxQuantity - gameConfig.orders.freeSpinsMode.minQuantity + 1)
-      ) + gameConfig.orders.freeSpinsMode.minQuantity;
-
-      const tipMultipliers = gameConfig.orders.normalMode.tipMultipliers;
-      const tipMultiplier = tipMultipliers[Math.floor(Math.random() * tipMultipliers.length)];
-
-      this.state.orders.push({
-        symbolId: symbol.id,
-        quantity,
-        collected: 0,
-        tipMultiplier,
-        completed: false
-      });
-    }
-  }
-
-  private generateOrder(): void {
-    let orderChance = gameConfig.orders.normalMode.chance;
-    if (this.state.anteMode === 'low') {
-      orderChance = gameConfig.anteMode.lowAnteOrderChance;
-    } else if (this.state.anteMode === 'high') {
-      orderChance = gameConfig.anteMode.highAnteOrderChance;
-    }
-
-    if (Math.random() < orderChance) {
-      const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
-      const quantity = Math.floor(
-        Math.random() *
-        (gameConfig.orders.normalMode.maxQuantity - gameConfig.orders.normalMode.minQuantity + 1)
-      ) + gameConfig.orders.normalMode.minQuantity;
-
-      const tipMultipliers = gameConfig.orders.normalMode.tipMultipliers;
-      const tipMultiplier = tipMultipliers[Math.floor(Math.random() * tipMultipliers.length)];
-
-      this.state.orders = [{
-        symbolId: symbol.id,
-        quantity,
-        collected: 0,
-        tipMultiplier,
-        completed: false
-      }];
-    }
-  }
-
   private checkOrderCompletion(): void {
     if (!this.state.isFreeSpins) {
+      // В обычном режиме: проверяем, выполнен ли заказ за этот спин
       let anyCompleted = false;
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
@@ -507,10 +443,12 @@ export class GameEngine {
           anyCompleted = true;
         }
       }
-      if (!anyCompleted) {
+      // Если заказ не выполнен — сбрасываем (заказ только на 1 спин)
+      if (!anyCompleted && this.state.lastBonusType === 'order') {
         this.state.orders = [];
       }
     } else {
+      // Во фриспинах заказы накапливаются
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;
@@ -524,13 +462,11 @@ export class GameEngine {
 
   private checkAllOrdersCompletion(): void {
     const allCompleted = this.state.orders.every(order => order.completed);
-
     if (allCompleted && this.state.orders.length > 0) {
       const superBonus = this.state.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier;
       this.state.balance += superBonus;
       this.state.totalWin += superBonus;
     }
-
     this.state.orders = [];
   }
 
@@ -547,35 +483,7 @@ export class GameEngine {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = pkg.spins;
 
-    const orderCount = Math.min(pkg.maxOrders, gameConfig.orders.freeSpinsMode.maxOrders);
-    this.state.orders = [];
-
-    for (let i = 0; i < orderCount; i++) {
-      const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
-      const quantity = Math.floor(
-        Math.random() *
-        (gameConfig.orders.freeSpinsMode.maxQuantity - gameConfig.orders.freeSpinsMode.minQuantity + 1)
-      ) + gameConfig.orders.freeSpinsMode.minQuantity;
-
-      const tipMultiplier = pkg.tipMultipliers[Math.floor(Math.random() * pkg.tipMultipliers.length)];
-
-      this.state.orders.push({
-        symbolId: symbol.id,
-        quantity,
-        collected: 0,
-        tipMultiplier,
-        completed: false
-      });
-    }
+    const orderCount = Math.min(pkg.maxOrders, 5);
+    this.generateOrdersFromScatter(orderCount);
   }
 }
-
-
-
-
-
-
-
-
-
-
