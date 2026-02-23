@@ -95,7 +95,7 @@ export class GameEngine {
   }
 
   /**
-   * Генерирует начальную сетку — включает scatter с его весом (~9.2% per cell)
+   * Генерирует начальную сетку — включает scatter с его весом (~9.5% per cell)
    */
   private generateInitialGrid(): GridCell[][] {
     const grid: GridCell[][] = [];
@@ -128,7 +128,7 @@ export class GameEngine {
 
   /**
    * Случайный символ включая scatter — для начальной генерации сетки.
-   * Вероятность scatter = 12 / 126 ≈ 0.0952 ≈ 9.5%
+   * Вероятность scatter = weight_scatter / allTotalWeight ≈ 9.2%
    */
   private getRandomSymbolWithScatter(): Symbol {
     const roll = Math.random() * this.allTotalWeight;
@@ -185,8 +185,14 @@ export class GameEngine {
     this.state.lastBonusType = 'none';
     this.state.lastScatterCount = 0;
 
-    // Сбрасываем заказы нормального режима (не фриспины)
+    // В обычном режиме: сбрасываем старые невыполненные заказы перед новым спином.
+    // Заказы из scatter живут ровно 1 спин: они выданы в прошлом спине,
+    // прогресс собирается В ЭТОМ спине, затем чекаются.
+    // Поэтому НЕ сбрасываем orders здесь — сброс происходит в checkOrderCompletion.
     if (!this.state.isFreeSpins) {
+      // Сбрасываем только если НЕ фриспины — заказы из предыдущего спина
+      // уже обработаны и должны быть очищены перед новым спином.
+      // Важно: новый scatter из ЭТОГО спина добавит новые заказы ПОСЛЕ каскадов.
       this.state.orders = [];
     }
 
@@ -194,13 +200,15 @@ export class GameEngine {
 
     const result = await this.processCascades();
 
-    // Проверяем scatter и генерируем заказы/бонусы
+    // Проверяем scatter и генерируем заказы/бонусы на основе финальной сетки
     this.checkScatterAndOrders();
 
     this.state.balance += result.totalWin;
     this.state.totalWin = result.totalWin;
     this.state.isSpinning = false;
 
+    // Проверяем выполнение заказов. Заказы из scatter этого спина
+    // будут проверены на следующем спине (collected = 0 сейчас).
     this.checkOrderCompletion();
 
     if (this.state.isFreeSpins && this.state.freeSpinsRemaining > 0) {
@@ -254,8 +262,10 @@ export class GameEngine {
   }
 
   /**
-   * Считаем scatter и применяем правила:
-   * 1–3 scatter → 1 заказ
+   * Считаем scatter в финальной сетке и применяем правила:
+   * 1 scatter → 1 заказ
+   * 2 scatter → 1 заказ  
+   * 3 scatter → 1 заказ
    * 4 scatter → мини-бонус (3 заказа + 5 фриспинов)
    * 5+ scatter → большой бонус (5 заказов + 10 фриспинов)
    */
@@ -288,10 +298,11 @@ export class GameEngine {
       this.state.lastBonusType = 'order';
       this.generateOrdersFromScatter(1);
     }
+    // 0 scatter — ничего
   }
 
   /**
-   * Генерирует N заказов на основе scatter.
+   * Генерирует N заказов.
    * Символ — случайная еда (не scatter), количество 10–20, чаевые x2–x10
    */
   private generateOrdersFromScatter(count: number): void {
@@ -432,23 +443,24 @@ export class GameEngine {
 
   private checkOrderCompletion(): void {
     if (!this.state.isFreeSpins) {
-      // В обычном режиме: проверяем, выполнен ли заказ за этот спин
-      let anyCompleted = false;
+      // В обычном режиме: заказы из ПРОШЛОГО спина проверяются сейчас.
+      // Заказы из ЭТОГО спина (lastBonusType === 'order') только что созданы
+      // с collected=0 — их проверим на следующем спине.
+      // 
+      // ВАЖНО: не сбрасываем заказы если они только что выданы (collected=0, !completed).
+      // Сброс устаревших заказов происходит в начале spin() через this.state.orders = [].
+      
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;
           const tip = this.state.currentBet * order.tipMultiplier;
           this.state.balance += tip;
           this.state.totalWin += tip;
-          anyCompleted = true;
         }
       }
-      // Если заказ не выполнен — сбрасываем (заказ только на 1 спин)
-      if (!anyCompleted && this.state.lastBonusType === 'order') {
-        this.state.orders = [];
-      }
+      // Не сбрасываем заказы здесь — они живут до следующего spin()
     } else {
-      // Во фриспинах заказы накапливаются
+      // Во фриспинах заказы накапливаются между спинами
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;

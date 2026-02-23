@@ -1,117 +1,81 @@
 {
-  "symbols": [
-    {
-      "id": "burger",
-      "name": "Burger",
-      "weight": 15,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "drink",
-      "name": "Drink",
-      "weight": 15,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "pie",
-      "name": "Pie",
-      "weight": 14,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "pizza",
-      "name": "Pizza",
-      "weight": 13,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "taco",
-      "name": "Taco",
-      "weight": 12,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "fries",
-      "name": "Fries",
-      "weight": 11,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "burrito",
-      "name": "Burrito",
-      "weight": 10,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "hotdog",
-      "name": "Hotdog",
-      "weight": 9,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "chicken",
-      "name": "Chicken",
-      "weight": 8,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "wrap",
-      "name": "Wrap",
-      "weight": 7,
-      "payouts": {
-        "12+": 50,
-        "10-11": 25,
-        "8-9": 10
-      }
-    },
-    {
-      "id": "scatter",
-      "name": "Order Ticket",
-      "weight": 3,
-      "isScatter": true,
-      "scatterTrigger": 3
-    }
-  ],
-  "totalWeight": 129,
   "gridSize": {
     "rows": 5,
     "columns": 6
   },
-  "minWinSymbols": 8
+  "minWinSymbols": 8,
+  "totalWeight": 1000,
+  "symbols": [
+    {
+      "id": "pie",
+      "name": "Pie",
+      "weight": 10,
+      "probability": 0.010,
+      "payouts": { "12+": 50, "10-11": 25, "8-9": 10 }
+    },
+    {
+      "id": "pizza",
+      "name": "Pizza",
+      "weight": 41,
+      "probability": 0.041,
+      "payouts": { "12+": 25, "10-11": 10, "8-9": 2.5 }
+    },
+    {
+      "id": "burger",
+      "name": "Burger",
+      "weight": 50,
+      "probability": 0.050,
+      "payouts": { "12+": 15, "10-11": 5, "8-9": 2 }
+    },
+    {
+      "id": "burrito",
+      "name": "Burrito",
+      "weight": 64,
+      "probability": 0.064,
+      "payouts": { "12+": 12, "10-11": 2, "8-9": 1.5 }
+    },
+    {
+      "id": "taco",
+      "name": "Taco",
+      "weight": 86,
+      "probability": 0.086,
+      "payouts": { "12+": 10, "10-11": 1.5, "8-9": 1 }
+    },
+    {
+      "id": "chicken",
+      "name": "Chicken",
+      "weight": 105,
+      "probability": 0.105,
+      "payouts": { "12+": 8, "10-11": 1.2, "8-9": 0.8 }
+    },
+    {
+      "id": "hotdog",
+      "name": "Hotdog",
+      "weight": 149,
+      "probability": 0.149,
+      "payouts": { "12+": 5, "10-11": 1, "8-9": 0.5 }
+    },
+    {
+      "id": "drink",
+      "name": "Drink",
+      "weight": 171,
+      "probability": 0.171,
+      "payouts": { "12+": 4, "10-11": 0.9, "8-9": 0.4 }
+    },
+    {
+      "id": "fries",
+      "name": "Fries",
+      "weight": 232,
+      "probability": 0.232,
+      "payouts": { "12+": 2, "10-11": 0.75, "8-9": 0.25 }
+    },
+    {
+      "id": "scatter",
+      "name": "Order Ticket",
+      "weight": 50,
+      "probability": 0.092,
+      "isScatter": true,
+      "payouts": {}
+    }
+  ]
 }

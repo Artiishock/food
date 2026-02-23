@@ -3,13 +3,14 @@ import { useGameSounds } from './useGameSounds';
 import * as PIXI from 'pixi.js';
 import { GameEngine, GridCell, WinInfo } from '../lib/gameEngine';
 import symbolsConfig from '../config/symbols.json';
+import { SHEET_FRAMES } from '../config/spriteFrames';
 
 interface GameCanvasProps {
   gameEngine: GameEngine;
   isSpinning?: boolean;
   soundEnabled?: boolean;
   onSpinComplete?: (result: any) => void;
-  onSpeedUpReady?: (speedUp: () => void) => void;  // колбэк для получения функции ускорения
+  onSpeedUpReady?: (speedUp: () => void) => void;
 }
 
 const CANVAS_W = 800;
@@ -26,20 +27,6 @@ const STOP_DELAY   = 160;
 const SPIN_BASE_MS = 1800;
 const GRAVITY = 1.3;
 const BOUNCE  = 0.28;
-
-const SHEET_FRAMES: Record<string, { x: number; y: number; w: number; h: number }> = {
-  burger:  { x: 0,   y: 50,  w: 341, h: 236 },
-  drink:   { x: 321, y: 30,  w: 341, h: 256 },
-  pie:     { x: 642, y: 30,  w: 342, h: 276 },
-  scatter: { x: 0,   y: 256, w: 341, h: 256 },
-  pizza:   { x: 331, y: 300, w: 341, h: 256 },
-  taco:    { x: 642, y: 300, w: 342, h: 256 },
-  fries:   { x: 0,   y: 555, w: 341, h: 226 },
-  burrito: { x: 331, y: 545, w: 331, h: 216 },
-  hotdog:  { x: 642, y: 542, w: 342, h: 216 },
-  wrap:    { x: 200, y: 775, w: 290, h: 226 },
-  chicken: { x: 510, y: 758, w: 240, h: 226 },
-};
 
 const FOOD_IDS = Object.keys(SHEET_FRAMES).filter(k => k !== 'scatter');
 
@@ -66,34 +53,28 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
   const busyRef       = useRef(false);
   const { play, setMuted } = useGameSounds();
   const stopSpin      = useRef<(() => void) | null>(null);
-  const speedMultRef  = useRef(1);   // 1 = нормально, 3 = ускорено
+  const speedMultRef  = useRef(1);
   const [ready, setReady] = useState(false);
   const [err,   setErr  ] = useState<string | null>(null);
 
-  // Синхронизируем mute с пропсом
   useEffect(() => {
     setMuted(!soundEnabled);
   }, [soundEnabled]);
 
-  // Функция ускорения — вызывается кнопкой или пробелом
   const speedUp = useCallback(() => {
     if (!busyRef.current) return;
     speedMultRef.current = speedMultRef.current === 1 ? 4 : 1;
   }, []);
 
-  // Передаём функцию ускорения родителю
   useEffect(() => {
     onSpeedUpReady?.(speedUp);
   }, [speedUp, onSpeedUpReady]);
 
-  // Слушаем пробел
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.code === 'Space' && e.target === document.body) {
         e.preventDefault();
-        if (busyRef.current) {
-          speedUp();
-        }
+        if (busyRef.current) speedUp();
       }
     };
     window.addEventListener('keydown', handler);
@@ -216,8 +197,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
   const runSpinSequence = async (initialGrid: GridCell[][], cascadeSteps: any[]) => {
     busyRef.current = true;
-    speedMultRef.current = 1;  // сбрасываем скорость перед каждым спином
-    // Запускаем звук вращения
+    speedMultRef.current = 1;
     stopSpin.current = play('spin') ?? null;
     try {
       await animateReels(initialGrid);
@@ -229,23 +209,12 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
     }
   };
 
-  /* ════════════════════════════════════
-     REEL SPIN ANIMATION
-
-     Каждая колонка имеет независимый offset (scrollY).
-     Финальные символы в canonical слотах (row+BUFFER) с самого старта.
-     container.y = 0 всегда. Движение через slot.container.y.
-     Порядок остановки: 0 → 1 → 2 → 3 → 4.
-  ════════════════════════════════════ */
   const animateReels = (finalGrid: GridCell[][]): Promise<void> => {
     return new Promise(resolve => {
       const app = appRef.current!;
       const SLOT_COUNT = ROWS + BUFFER * 2;
       const TOTAL_H    = SLOT_COUNT * CH;
 
-      // Финальные символы → canonical слоты (row+BUFFER)
-      // Стартовая позиция: slot[row+BUFFER].y = (row+BUFFER-BUFFER)*CH - ROWS*CH = row*CH - ROWS*CH
-      // т.е. выше экрана на ROWS*CH
       for (let col = 0; col < COLS; col++) {
         const reel = reelsRef.current[col];
         reel.container.y = 0;
@@ -259,17 +228,14 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
           } else {
             setSlotSymbol(reel.slots[i], randomFood());
           }
-          // Начальный Y: сдвигаем все слоты вверх на ROWS*CH
-          // Canonical слоты стартуют выше экрана, въедут когда прокрутимся на ROWS*CH
           reel.slots[i].container.y = (i - BUFFER) * CH - ROWS * CH;
           resetSlotAppearance(reel.slots[i]);
         }
       }
 
-      // Независимое состояние для каждой колонки
       const vel        = new Array(COLS).fill(SPIN_SPEED);
-      const scrolled   = new Array(COLS).fill(0);   // суммарно прокручено px
-      const snapTarget = new Array(COLS).fill(-1);   // целевой scroll (px), -1 = не задан
+      const scrolled   = new Array(COLS).fill(0);
+      const snapTarget = new Array(COLS).fill(-1);
       const stopped    = new Array(COLS).fill(false);
       let elapsed      = 0;
 
@@ -285,21 +251,15 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
           const stopAt = SPIN_BASE_MS + col * STOP_DELAY;
           const reel   = reelsRef.current[col];
 
-          // Начинаем торможение
           if (elapsed >= stopAt) {
             vel[col] = Math.max(0, vel[col] - DECEL * spd);
 
-            // Фиксируем snap-target один раз в начале торможения
             if (snapTarget[col] < 0) {
-              // Цель: scrolled ≡ ROWS*CH (mod TOTAL_H)
-              // Это значит canonical слоты окажутся ровно на row*CH
-              // Находим ближайшее такое значение ВПЕРЕДИ текущего scrolled
               const cur = scrolled[col];
-              const mod = ROWS * CH; // остаток который нам нужен
-              // Сколько пикселей до следующей "правильной" точки
+              const mod = ROWS * CH;
               const curMod = cur % TOTAL_H;
               let dist = mod - curMod;
-              if (dist <= 0) dist += TOTAL_H;  // берём следующую, не текущую
+              if (dist <= 0) dist += TOTAL_H;
               snapTarget[col] = cur + dist;
             }
           }
@@ -309,7 +269,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
           const atTarget  = snapTarget[col] >= 0 && remaining <= 0;
 
           if (atTarget) {
-            // Точно на месте — фиксируем финальные позиции
             for (let i = 0; i < SLOT_COUNT; i++) {
               const isCanonical = i >= BUFFER && i < BUFFER + ROWS;
               const row = i - BUFFER;
@@ -323,27 +282,22 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
                 reel.slots[i].bg.roundRect(2, 2, CW - 4, CH - 4, 6).fill(0x2a2a3e).stroke({ width: 1.5, color: 0x444466 });
               }
             }
-            // Звук остановки барабана
             play('reelStop', { col });
             stopped[col] = true;
             continue;
           }
 
-          // Скорость: минимум при докрутке чтобы не ползти
           const SNAP_MIN = SPIN_SPEED * 0.35 * spd;
           const effectiveV = (snapTarget[col] >= 0 && v < SNAP_MIN) ? SNAP_MIN : v;
           const step = Math.min(effectiveV, remaining < Infinity ? remaining : effectiveV);
 
           scrolled[col] += step;
 
-          // Двигаем все слоты вниз на step
           for (let i = 0; i < SLOT_COUNT; i++) {
             reel.slots[i].container.y += step;
 
-            // Слот ушёл за нижний край → переносим наверх
             if (reel.slots[i].container.y > CANVAS_H + CH) {
               reel.slots[i].container.y -= TOTAL_H;
-              // Canonical слоты не трогаем — они несут финальные символы
               const isCanonical = i >= BUFFER && i < BUFFER + ROWS;
               if (!isCanonical) {
                 setSlotSymbol(reel.slots[i], randomFood());
@@ -355,7 +309,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
         if (allStopped) {
           app.ticker.remove(tick);
-          // Останавливаем звук вращения
           stopSpin.current?.();
           stopSpin.current = null;
           resolve();
@@ -365,9 +318,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
       app.ticker.add(tick);
     });
   };
-  /* ════════════════════════════════════
-     CASCADE
-  ════════════════════════════════════ */
+
   const doCascade = async (step: any) => {
     const winPositions = new Set<string>();
     (step.wins as WinInfo[]).forEach(w => w.cells.forEach(c => winPositions.add(`${c.row}-${c.col}`)));
@@ -386,20 +337,15 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
     await sleep(180 / speedMultRef.current);
   };
 
-  // Победная анимация: увеличение → полёт вниз к центру нижней панели → исчезновение
   const highlightCells = (positions: Set<string>): Promise<void> =>
     new Promise(resolve => {
       const app = appRef.current!;
       const fx  = fxLayerRef.current!;
       const spd = speedMultRef.current;
 
-      // Центр нижней панели в координатах canvas
-      // Нижняя панель: Y = CANVAS_H (сразу под canvas), центр X = CANVAS_W / 2
       const TARGET_X = CANVAS_W / 2;
-      const TARGET_Y = CANVAS_H + 40; // чуть ниже края canvas
+      const TARGET_Y = CANVAS_H + 40;
 
-      // Для каждой позиции создаём клон-спрайт в fxLayer (поверх всего)
-      // Оригинальный слот скрываем сразу — анимируем только клон
       type FlyItem = {
         sprite:    PIXI.Sprite;
         bg:        PIXI.Graphics;
@@ -417,33 +363,29 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
         const slot = getSlotAt(pos);
         if (!slot) return;
 
-        // Стартовая позиция клона = центр ячейки в мировых координатах
         const [row, col] = pos.split('-').map(Number);
         const startX = col * CW + CW / 2;
         const startY = row * CH + CH / 2;
 
-        // Клон фона
         const bg = new PIXI.Graphics();
         bg.roundRect(-CW / 2 + 2, -CH / 2 + 2, CW - 4, CH - 4, 6)
           .fill(0xffdd00).stroke({ width: 2.5, color: 0xff9900 });
         bg.position.set(startX, startY);
         fx.addChild(bg);
 
-        // Клон спрайта — копируем scale из оригинала
         const sprite = new PIXI.Sprite(slot.sprite.texture);
         sprite.anchor.set(0.5);
         sprite.position.set(startX, startY);
         sprite.scale.set(slot.sprite.scale.x, slot.sprite.scale.y);
         fx.addChild(sprite);
 
-        // Скрываем оригинальный слот
         slot.container.visible = false;
 
         items.push({ sprite, bg, startX, startY, baseScale: slot.sprite.scale.x, phase: 'grow', t: 0, done: false });
       });
 
-      const GROW_DUR = 400 / spd;  // ms — фаза увеличения с подсветкой
-      const FLY_DUR  = 500 / spd;  // ms — фаза полёта вниз
+      const GROW_DUR = 400 / spd;
+      const FLY_DUR  = 500 / spd;
 
       const tick = (ticker: PIXI.Ticker) => {
         const dt = ticker.deltaTime * (1000 / 60);
@@ -502,7 +444,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
       app.ticker.add(tick);
     });
 
-  // explodeCells теперь только скрывает оригиналы (клоны уже улетели в highlightCells)
   const explodeCells = (positions: Set<string>): Promise<void> =>
     new Promise(resolve => {
       positions.forEach(pos => {
@@ -526,14 +467,11 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
         const reel = reelsRef.current[col]; if (!reel) continue;
         reel.container.y = 0;
 
-        // Удалённые строки в этой колонке
         const removedRows = new Set<number>();
         removedPositions.forEach(pos => {
           const [r, c] = pos.split('-').map(Number);
           if (c === col) removedRows.add(r);
         });
-
-        const numRemoved = removedRows.size;
 
         for (let row = 0; row < ROWS; row++) {
           const slot = reel.slots[row + BUFFER];
@@ -542,26 +480,11 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
           const targetY = row * CH;
 
-          // Определяем startY для этого символа:
-          // Символ "новый" (пришёл сверху) если в beforeGrid его не было вообще
-          // или его позиция в beforeGrid была выше текущей.
-          //
-          // Алгоритм каскада: удаляем winPositions, оставшиеся символы
-          // сдвигаются вниз на кол-во удалённых ниже них, новые заполняют сверху.
-          //
-          // Для строки row в finalGrid:
-          // - Считаем сколько удалённых строк НИЖЕ row (включая row) в этой колонке
-          //   → это смещение вниз для символа который был выше
-          // - Если символ был в beforeGrid[row - shift][col] → он сдвинулся вниз
-          // - Если row - shift < 0 → символ новый, падает сверху
-
-          // Кол-во удалённых строк <= row (т.е. на уровне row и выше)
           let removedAboveOrAt = 0;
           for (let r = 0; r <= row; r++) {
             if (removedRows.has(r)) removedAboveOrAt++;
           }
 
-          // Откуда пришёл этот символ в beforeGrid
           const sourceRow = row - removedAboveOrAt;
           const isNew = sourceRow < 0;
 
@@ -575,14 +498,10 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
           let startY: number;
           if (isNew) {
-            // Новый символ — стартует выше экрана
-            // Чем выше строка тем выше стартует
             startY = targetY - (Math.abs(sourceRow) + 1) * CH;
           } else if (removedAboveOrAt > 0) {
-            // Существующий символ сдвинулся вниз — стартует со своей старой позиции
             startY = sourceRow * CH;
           } else {
-            // Символ не двигался — сразу на месте
             slot.container.y = targetY;
             continue;
           }
