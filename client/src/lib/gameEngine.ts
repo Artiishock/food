@@ -37,8 +37,8 @@ export interface WinInfo {
 
 export interface CascadeStep {
   wins: WinInfo[];
-  isScatterStep: boolean;       // true = этот шаг — удаление scatter, не комбинация
-  scatterCells: GridCell[];     // позиции scatter которые были убраны
+  isScatterStep: boolean;
+  scatterCells: GridCell[];
   gridBeforeRemoval: GridCell[][];
   gridAfterRemoval: GridCell[][];
   gridAfterDrop: GridCell[][];
@@ -49,9 +49,9 @@ export type BonusType = 'none' | 'order' | 'mini' | 'big';
 
 export interface GameState {
   grid: GridCell[][];
-  pendingGrid: GridCell[][] | null;  // сетка подготовлена заранее, до спина
-  pendingOrders: Order[];             // ордера подготовлены заранее, до спина
-  preparedOrders: Order[];            // снапшот для UI — хранится до onOrdersAppear
+  pendingGrid: GridCell[][] | null;
+  pendingOrders: Order[];
+  preparedOrders: Order[];
   balance: number;
   currentBet: number;
   totalWin: number;
@@ -102,27 +102,13 @@ export class GameEngine {
     };
   }
 
-  /**
-   * Генерирует начальную сетку с контролируемым количеством scatter.
-   * 
-   * Распределение scatter за спин:
-   *   0 scatter — ~40% спинов
-   *   1 scatter — ~35% спинов
-   *   2 scatter — ~16% спинов
-   *   3 scatter — ~7%  спинов
-   *   4 scatter — ~1.5% спинов  (мини-бонус)
-   *   5 scatter — ~0.5% спинов  (большой бонус, крайне редко)
-   *   6+ scatter — НЕВОЗМОЖНО
-   */
   private generateInitialGrid(): GridCell[][] {
     const ROWS = symbolsConfig.gridSize.rows;
     const COLS = symbolsConfig.gridSize.columns;
-    const TOTAL = ROWS * COLS; // 30 клеток
+    const TOTAL = ROWS * COLS;
 
-    // Сначала определяем сколько scatter выпадет в этом спине
     const scatterCount = this.rollScatterCount();
 
-    // Случайно выбираем позиции для scatter
     const positions = new Set<number>();
     while (positions.size < scatterCount) {
       positions.add(Math.floor(Math.random() * TOTAL));
@@ -145,12 +131,7 @@ export class GameEngine {
     return grid;
   }
 
-  /**
-   * Определяет количество scatter за спин по взвешенной вероятности.
-   * Максимум 5 — никогда не выпадет 6+.
-   */
   private rollScatterCount(): number {
-    // Веса: [0, 1, 2, 3, 4, 5]
     const weights = [40, 35, 16, 7, 1.5, 0.5];
     const total = weights.reduce((a, b) => a + b, 0);
     const roll = Math.random() * total;
@@ -162,17 +143,11 @@ export class GameEngine {
     return 0;
   }
 
-  /**
-   * Возвращает символ scatter.
-   */
   private getScatterSymbol(): Symbol {
     const scatter = this.allSymbols.find(s => s.isScatter);
     return scatter ? { ...scatter } : { ...this.foodSymbols[0] };
   }
 
-  /**
-   * Случайный символ еды (без scatter) — для заполнения после каскада
-   */
   private getRandomFoodSymbol(): Symbol {
     const roll = Math.random() * this.foodTotalWeight;
     let accumulated = 0;
@@ -183,9 +158,6 @@ export class GameEngine {
     return { ...this.foodSymbols[this.foodSymbols.length - 1] };
   }
 
-  /**
-   * Случайный множитель чаевых x2–x10
-   */
   private getRandomTipMultiplier(): number {
     const multipliers = [2, 3, 4, 5, 6, 7, 8, 9, 10];
     return multipliers[Math.floor(Math.random() * multipliers.length)];
@@ -205,37 +177,30 @@ export class GameEngine {
     this.state.anteMode = mode;
   }
 
-  /**
-   * Подготавливает следующий спин ЗАРАНЕЕ:
-   * генерирует сетку, считает scatter, создаёт ордера.
-   * Вызывается ДО начала анимации барабанов.
-   * 
-   * Возвращает pendingOrders — ордера которые появятся в блоке заказов
-   * сразу когда scatter долетит (ещё до каскадов).
-   */
   public prepare(): Order[] {
     if (this.state.isSpinning) return [];
 
-    // Сбрасываем старые ордера
     if (!this.state.isFreeSpins) {
       this.state.orders = [];
     }
 
-    // Генерируем сетку заранее
     const grid = this.generateInitialGrid();
     this.state.pendingGrid = grid;
 
-    // Считаем scatter и генерируем ордера — сохраняем как pending
     const pendingOrders = this.computeOrdersFromGrid(grid);
     this.state.pendingOrders = pendingOrders;
-    this.state.preparedOrders = [...pendingOrders]; // снапшот для UI, не расходуется spin()
+
+    // ✅ ИСПРАВЛЕНИЕ: глубокое копирование объектов Order,
+    // чтобы updateOrderProgress() не мутировал снапшот для UI.
+    // Раньше был shallow copy [...pendingOrders] — объекты Order
+    // были теми же ссылками, и когда каскады обновляли collected,
+    // preparedOrders тоже менялся, из-за чего ордера при появлении
+    // уже показывали ненулевой прогресс.
+    this.state.preparedOrders = pendingOrders.map(o => ({ ...o }));
 
     return pendingOrders;
   }
 
-  /**
-   * Считает scatter в сетке и возвращает список ордеров (без применения к state).
-   */
   private computeOrdersFromGrid(grid: GridCell[][]): Order[] {
     let scatterCount = 0;
     for (const row of grid) {
@@ -263,9 +228,6 @@ export class GameEngine {
     return [];
   }
 
-  /**
-   * Строит N объектов Order (без записи в state).
-   */
   private buildOrders(count: number): Order[] {
     const orders: Order[] = [];
     for (let i = 0; i < count; i++) {
@@ -300,8 +262,6 @@ export class GameEngine {
     this.state.lastBonusType = 'none';
     this.state.lastScatterCount = 0;
 
-    // Используем сетку и ордера подготовленные заранее в prepare().
-    // Если prepare() не был вызван — генерируем на месте (fallback).
     if (this.state.pendingGrid) {
       this.state.grid = this.state.pendingGrid;
       this.state.pendingGrid = null;
@@ -311,20 +271,17 @@ export class GameEngine {
       this.checkScatterAndOrders();
     }
 
-    // Применяем подготовленные ордера в state (они уже показаны в UI)
     if (this.state.pendingOrders.length > 0) {
       this.state.orders = this.state.pendingOrders;
       this.state.pendingOrders = [];
     }
 
-    // Запускаем каскады — они собирают прогресс по уже активным ордерам
     const result = await this.processCascades();
 
     this.state.balance += result.totalWin;
     this.state.totalWin = result.totalWin;
     this.state.isSpinning = false;
 
-    // Шаг 5: Проверяем выполнение ордеров после всех каскадов
     this.checkOrderCompletion();
 
     if (this.state.isFreeSpins && this.state.freeSpinsRemaining > 0) {
@@ -343,8 +300,6 @@ export class GameEngine {
     let totalWin = 0;
     const allWins: WinInfo[] = [];
 
-    // ШАГ 0: Сначала убираем scatter из сетки — они уже сработали (создали ордера).
-    // Это происходит ДО любых комбинаций, scatter визуально исчезают первыми.
     const scatterCells = this.findScatterCells(this.state.grid);
     if (scatterCells.length > 0) {
       const gridBeforeRemoval = this.cloneGrid(this.state.grid);
@@ -355,7 +310,6 @@ export class GameEngine {
       this.fillEmptySpaces();
       const gridAfterFill = this.cloneGrid(this.state.grid);
 
-      // Записываем scatter-шаг как отдельный cascade step (без wins, но с анимацией)
       this.state.cascadeSteps.push({
         wins: [],
         isScatterStep: true,
@@ -367,7 +321,6 @@ export class GameEngine {
       });
     }
 
-    // ШАГ 1+: Обычные каскады по комбинациям ≥8
     while (true) {
       const wins = this.findWinningCombinations(this.state.grid);
       if (wins.length === 0) break;
@@ -404,9 +357,6 @@ export class GameEngine {
     return { wins: allWins, cascades: cascadeCount, totalWin };
   }
 
-  /**
-   * Находит все scatter клетки в сетке.
-   */
   private findScatterCells(grid: GridCell[][]): GridCell[] {
     const cells: GridCell[] = [];
     for (let row = 0; row < grid.length; row++) {
@@ -418,9 +368,6 @@ export class GameEngine {
     return cells;
   }
 
-  /**
-   * Удаляет scatter клетки из сетки (они уже отработали).
-   */
   private removeScatterCells(scatterCells: GridCell[]): void {
     for (const cell of scatterCells) {
       if (this.state.grid[cell.row]?.[cell.col]) {
@@ -429,12 +376,6 @@ export class GameEngine {
     }
   }
 
-  /**
-   * Считаем scatter в начальной сетке (ДО каскадов) и создаём ордера/бонусы:
-   * 1-3 scatter → 1 заказ (ордера существуют с первого каскада)
-   * 4 scatter   → мини-бонус (3 заказа + 5 фриспинов)
-   * 5  scatter  → большой бонус (5 заказов + 10 фриспинов)
-   */
   private checkScatterAndOrders(): void {
     let scatterCount = 0;
     for (let row = 0; row < this.state.grid.length; row++) {
@@ -447,36 +388,27 @@ export class GameEngine {
     this.state.lastScatterCount = scatterCount;
 
     if (this.state.isFreeSpins) {
-      // Во фриспинах scatter не даёт новых бонусов, заказы уже активны
       return;
     }
 
     if (scatterCount >= 5) {
-      // Большой бонус — 10 фриспинов + 5 заказов
       this.state.lastBonusType = 'big';
       this.triggerBigBonus();
     } else if (scatterCount === 4) {
-      // Мини-бонус — 5 фриспинов + 3 заказа
       this.state.lastBonusType = 'mini';
       this.triggerMiniBonus();
     } else if (scatterCount >= 1) {
-      // 1–3 scatter → 1 заказ (без фриспинов)
       this.state.lastBonusType = 'order';
       this.generateOrdersFromScatter(1);
     }
-    // 0 scatter — ничего
   }
 
-  /**
-   * Генерирует N заказов.
-   * Символ — случайная еда (не scatter), количество 10–20, чаевые x2–x10
-   */
   private generateOrdersFromScatter(count: number): void {
     this.state.orders = [];
     for (let i = 0; i < count; i++) {
       const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
-      const quantity = Math.floor(Math.random() * 11) + 10; // 10–20
-      const tipMultiplier = this.getRandomTipMultiplier(); // x2–x10
+      const quantity = Math.floor(Math.random() * 11) + 10;
+      const tipMultiplier = this.getRandomTipMultiplier();
 
       this.state.orders.push({
         symbolId: symbol.id,
@@ -488,18 +420,12 @@ export class GameEngine {
     }
   }
 
-  /**
-   * Мини-бонус: 5 фриспинов, 3 заказа
-   */
   private triggerMiniBonus(): void {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = 5;
     this.generateOrdersFromScatter(3);
   }
 
-  /**
-   * Большой бонус: 10 фриспинов, 5 заказов
-   */
   private triggerBigBonus(): void {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = 10;
@@ -519,7 +445,7 @@ export class GameEngine {
         if (!cell.symbol) continue;
         const sid = cell.symbol.id;
         if (typeof sid !== 'string' || sid === '') continue;
-        if (cell.symbol.isScatter) continue; // scatter не участвует в комбинациях
+        if (cell.symbol.isScatter) continue;
         if (!groups.has(sid)) groups.set(sid, []);
         groups.get(sid)!.push({ symbol: { ...cell.symbol }, row: cell.row, col: cell.col, id: cell.id });
       }
@@ -609,13 +535,6 @@ export class GameEngine {
 
   private checkOrderCompletion(): void {
     if (!this.state.isFreeSpins) {
-      // В обычном режиме: заказы из ПРОШЛОГО спина проверяются сейчас.
-      // Заказы из ЭТОГО спина (lastBonusType === 'order') только что созданы
-      // с collected=0 — их проверим на следующем спине.
-      // 
-      // ВАЖНО: не сбрасываем заказы если они только что выданы (collected=0, !completed).
-      // Сброс устаревших заказов происходит в начале spin() через this.state.orders = [].
-      
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;
@@ -624,9 +543,7 @@ export class GameEngine {
           this.state.totalWin += tip;
         }
       }
-      // Не сбрасываем заказы здесь — они живут до следующего spin()
     } else {
-      // Во фриспинах заказы накапливаются между спинами
       for (const order of this.state.orders) {
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;
