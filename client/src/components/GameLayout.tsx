@@ -7,6 +7,7 @@ interface GameLayoutProps {
   orders: ReactNode;
   leftBanners: ReactNode;
   bottomBar: ReactNode;
+  topBanner?: ReactNode;
 }
 
 export default function GameLayout({
@@ -15,18 +16,24 @@ export default function GameLayout({
   orders,
   leftBanners,
   bottomBar,
+  topBanner,
 }: GameLayoutProps) {
   return (
     <div className="layout">
       {/* Main Game Area */}
       <div className="main-area">
-        {/* LEFT COLUMN: Banners (FS Packages and Ante) */}
+        {/* LEFT COLUMN: Banners (Ante) */}
         <div className="left-column">
           {leftBanners}
         </div>
 
-        {/* CENTER COLUMN: Game Board */}
+        {/* CENTER COLUMN: Top Banner + Game Board */}
         <div className="center-column">
+          {topBanner && (
+            <div className="top-banner-area">
+              {topBanner}
+            </div>
+          )}
           <div className="game-board-card">
             {gameBoard}
           </div>

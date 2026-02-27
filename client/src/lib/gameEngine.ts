@@ -63,6 +63,8 @@ export interface GameState {
   cascadeSteps: CascadeStep[];
   lastScatterCount: number;
   lastBonusType: BonusType;
+  // Track total orders completed during this free spins session
+  freeSpinsTotalCompletedTips: number;
 }
 
 export class GameEngine {
@@ -99,6 +101,7 @@ export class GameEngine {
       cascadeSteps: [],
       lastScatterCount: 0,
       lastBonusType: 'none',
+      freeSpinsTotalCompletedTips: 0,
     };
   }
 
@@ -190,12 +193,6 @@ export class GameEngine {
     const pendingOrders = this.computeOrdersFromGrid(grid);
     this.state.pendingOrders = pendingOrders;
 
-    // ✅ ИСПРАВЛЕНИЕ: глубокое копирование объектов Order,
-    // чтобы updateOrderProgress() не мутировал снапшот для UI.
-    // Раньше был shallow copy [...pendingOrders] — объекты Order
-    // были теми же ссылками, и когда каскады обновляли collected,
-    // preparedOrders тоже менялся, из-за чего ордера при появлении
-    // уже показывали ненулевой прогресс.
     this.state.preparedOrders = pendingOrders.map(o => ({ ...o }));
 
     return pendingOrders;
@@ -237,6 +234,13 @@ export class GameEngine {
       orders.push({ symbolId: symbol.id, quantity, collected: 0, tipMultiplier, completed: false });
     }
     return orders;
+  }
+
+  private buildSingleOrder(): Order {
+    const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
+    const quantity = Math.floor(Math.random() * 11) + 10;
+    const tipMultiplier = this.getRandomTipMultiplier();
+    return { symbolId: symbol.id, quantity, collected: 0, tipMultiplier, completed: false };
   }
 
   public async spin(): Promise<{ wins: WinInfo[], cascades: number, totalWin: number }> {
@@ -289,6 +293,7 @@ export class GameEngine {
       if (this.state.freeSpinsRemaining === 0) {
         this.state.isFreeSpins = false;
         this.checkAllOrdersCompletion();
+        this.state.freeSpinsTotalCompletedTips = 0;
       }
     }
 
@@ -423,12 +428,14 @@ export class GameEngine {
   private triggerMiniBonus(): void {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = 5;
+    this.state.freeSpinsTotalCompletedTips = 0;
     this.generateOrdersFromScatter(3);
   }
 
   private triggerBigBonus(): void {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = 10;
+    this.state.freeSpinsTotalCompletedTips = 0;
     this.generateOrdersFromScatter(5);
   }
 
@@ -534,14 +541,23 @@ export class GameEngine {
   }
 
   private checkOrderCompletion(): void {
-    if (!this.state.isFreeSpins) {
-      for (const order of this.state.orders) {
+    if (this.state.isFreeSpins) {
+      // During free spins: completed orders award tips AND are replaced with new orders
+      const completedIndices: number[] = [];
+      for (let i = 0; i < this.state.orders.length; i++) {
+        const order = this.state.orders[i];
         if (order.collected >= order.quantity && !order.completed) {
           order.completed = true;
           const tip = this.state.currentBet * order.tipMultiplier;
           this.state.balance += tip;
           this.state.totalWin += tip;
+          this.state.freeSpinsTotalCompletedTips += tip;
+          completedIndices.push(i);
         }
+      }
+      // Replace completed orders with new ones
+      for (const idx of completedIndices) {
+        this.state.orders[idx] = this.buildSingleOrder();
       }
     } else {
       for (const order of this.state.orders) {
@@ -577,6 +593,7 @@ export class GameEngine {
     this.state.balance -= pkg.cost * this.state.currentBet;
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = pkg.spins;
+    this.state.freeSpinsTotalCompletedTips = 0;
 
     const orderCount = Math.min(pkg.maxOrders, 5);
     this.generateOrdersFromScatter(orderCount);

@@ -52,27 +52,39 @@ function SymbolIcon({ symbolId }: { symbolId: string }) {
 
 export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayProps) {
   const [isFlashing, setIsFlashing] = useState(false);
+  const [animatedNewIds, setAnimatedNewIds] = useState<Set<string>>(new Set());
 
-  // Регистрируем функцию-триггер у родителя.
-  // Родитель вызовет её когда scatter долетит — она запустит анимацию
-  // и вернёт Promise который резолвится после 600ms (длина анимации).
-  // GameCanvas ждёт этот Promise перед запуском каскадов.
   useEffect(() => {
     const triggerFn = (): Promise<void> => {
       return new Promise(resolve => {
         setIsFlashing(false);
-        // Небольшой таймаут чтобы React сбросил класс и анимация сыграла заново
         requestAnimationFrame(() => {
           setIsFlashing(true);
           setTimeout(() => {
             setIsFlashing(false);
-            resolve();  // каскады могут начинаться
+            resolve();
           }, 600);
         });
       });
     };
     onReadyToShow?.(triggerFn);
   }, [onReadyToShow]);
+
+  // Отслеживаем новые ордера и анимируем их появление
+  useEffect(() => {
+    const newOrders = orders.filter(o => o.isNew);
+    if (newOrders.length > 0) {
+      // Создаём уникальные ключи для новых ордеров
+      const newKeys = new Set(
+        newOrders.map((o, i) => `${o.symbolId}-${o.quantity}-${i}`)
+      );
+      setAnimatedNewIds(newKeys);
+      // Убираем класс через 800ms (после анимации)
+      const t = setTimeout(() => setAnimatedNewIds(new Set()), 800);
+      return () => clearTimeout(t);
+    }
+  }, [orders]);
+
   if (orders.length === 0) {
     return null;
   }
@@ -84,13 +96,18 @@ export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayPr
       {orders.map((order, index) => {
         const progress = (order.collected / order.quantity) * 100;
         const isCompleted = order.completed;
+        const isNew = order.isNew === true;
 
         return (
           <div
-            key={index}
-            className={`order-card ${isCompleted ? 'order-card--completed' : ''}`}
+            key={`${order.symbolId}-${order.quantity}-${index}`}
+            className={`order-card ${isCompleted ? 'order-card--completed' : ''} ${isNew ? 'order-card--new' : ''}`}
             style={{ transform: `rotate(${index % 2 === 0 ? -1 : 1}deg)` }}
           >
+            {isNew && (
+              <div className="order-card__new-badge">NEW ORDER!</div>
+            )}
+
             <div className="order-card__header">
               <div className="order-card__icon">
                 <SymbolIcon symbolId={order.symbolId} />

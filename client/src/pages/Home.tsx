@@ -4,6 +4,7 @@ import GameLayout from '../components/GameLayout';
 import BottomControlBar from '../components/BottomControlBar';
 import LeftBanners from '../components/LeftBanners';
 import OrdersDisplay from '../components/OrdersDisplay';
+import FreeSpinsBanner from '../components/FreeSpinsBanner';
 import TipsNotification from '../components/TipsNotification';
 import { GameEngine, Order } from '../lib/gameEngine';
 import symbolsConfig from '../config/symbols.json';
@@ -24,24 +25,19 @@ export default function Home() {
   const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
   const [isFast, setIsFast] = useState(false);
 
-  // Ордера подготовленные ЗАРАНЕЕ — до начала анимации барабанов.
-  // Они показываются в блоке заказов в момент когда scatter долетает,
-  // ещё до того как начались каскады.
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [lastWin, setLastWin] = useState(0);
 
-  // Ref хранит triggerFn из OrdersDisplay.
-  // Когда scatter долетает до блока заказов — GameCanvas вызывает onOrdersAppear(),
-  // которая вызывает этот триггер и ЖДЁТ его Promise прежде чем запустить каскады.
   const ordersAnimTriggerRef = useRef<(() => Promise<void>) | null>(null);
+  const isSpinningRef = useRef(false);
+  const freeSpinsAutoRef = useRef(false);
 
   const handleSpin = async () => {
-    if (isSpinning) return;
+    if (isSpinningRef.current) return;
+    isSpinningRef.current = true;
     setLastWin(0);
     setIsFast(false);
     try {
-      // Готовим сетку и ордера заранее, но НЕ показываем их в UI.
-      // Ордера появятся только когда scatter долетит до блока заказов.
       gameEngine.prepare();
 
       setIsSpinning(true);
@@ -49,38 +45,51 @@ export default function Home() {
     } catch (error) {
       console.error('Spin error:', error);
       setIsSpinning(false);
+      isSpinningRef.current = false;
+      freeSpinsAutoRef.current = false;
       setPendingOrders([]);
       setGameState(gameEngine.getState());
     }
   };
 
   const handleSpinComplete = () => {
-    console.log("[Home] handleSpinComplete called, isFast will be reset");
     setIsSpinning(false);
+    isSpinningRef.current = false;
     setIsFast(false);
-    // Все каскады завершены — старые ордера больше не нужны отдельно.
-    // gameState.orders теперь содержит актуальное состояние (включая новые ордера).
-    // Очищаем pendingOrders чтобы убрать дубли.
     setPendingOrders([]);
     const newState = gameEngine.getState();
     setGameState(newState);
     setLastWin(newState.totalWin ?? 0);
 
-    const completed = newState.orders.filter(o => o.completed);
-    if (completed.length > 0) {
-      const allCompleted = newState.orders.length > 0 &&
-                           newState.orders.every(o => o.completed) &&
-                           !newState.isFreeSpins &&
-                           newState.freeSpinsRemaining === 0;
+    // During free spins orders are replaced — no notification per spin
+    // Only show notification for normal mode completed orders
+    if (!newState.isFreeSpins) {
+      const completed = newState.orders.filter(o => o.completed);
+      if (completed.length > 0) {
+        const allCompleted = newState.orders.length > 0 &&
+                             newState.orders.every(o => o.completed) &&
+                             !newState.isFreeSpins &&
+                             newState.freeSpinsRemaining === 0;
 
-      const superBonus = allCompleted
-        ? newState.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier
-        : 0;
+        const superBonus = allCompleted
+          ? newState.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier
+          : 0;
 
-      setCompletedOrdersForNotif(completed);
-      setSuperBonusAwarded(allCompleted);
-      setSuperBonusAmount(superBonus);
-      setShowTipsNotification(true);
+        setCompletedOrdersForNotif(completed);
+        setSuperBonusAwarded(allCompleted);
+        setSuperBonusAmount(superBonus);
+        setShowTipsNotification(true);
+      }
+    }
+
+    // Auto-spin: continue while free spins remain
+    if (freeSpinsAutoRef.current && newState.isFreeSpins && newState.freeSpinsRemaining > 0) {
+      setTimeout(() => {
+        if (freeSpinsAutoRef.current) handleSpin();
+      }, 500);
+    } else if (!newState.isFreeSpins) {
+      // Free spins ended — stop auto spin
+      freeSpinsAutoRef.current = false;
     }
   };
 
@@ -97,9 +106,13 @@ export default function Home() {
   };
 
   const handleBuyFreeSpins = (type: 'cheap' | 'standard') => {
+    if (isSpinningRef.current) return;
     try {
       gameEngine.buyFreeSpins(type);
       setGameState(gameEngine.getState());
+      // Start auto-spin for all purchased free spins
+      freeSpinsAutoRef.current = true;
+      setTimeout(() => handleSpin(), 300);
     } catch (error) {
       console.error('Failed to buy free spins:', error);
     }
@@ -128,21 +141,22 @@ export default function Home() {
         orders={
           <OrdersDisplay
             orders={[
-              // Старые ордера показываем до конца спина — они ещё могут выполниться в каскадах.
-              // Новые (pending) появляются когда scatter долетел, но рядом со старыми.
-              // После handleSpinComplete pendingOrders очищается и остаётся только gameState.orders.
               ...gameState.orders,
               ...pendingOrders.filter(p =>
-                // не дублируем если ордер уже есть в gameState (после спина)
                 !gameState.orders.some(o => o.symbolId === p.symbolId && o.quantity === p.quantity && o.collected === 0)
               )
             ]}
             onReadyToShow={(triggerFn) => {
-              // OrdersDisplay регистрирует свою анимацию-триггер здесь.
-              // GameCanvas будет вызывать её когда scatter долетает к блоку заказов.
               ordersAnimTriggerRef.current = triggerFn;
             }}
           />
+        }
+        topBanner={
+          gameState.isFreeSpins ? (
+            <FreeSpinsBanner
+              freeSpinsRemaining={gameState.freeSpinsRemaining}
+            />
+          ) : undefined
         }
         gameBoard={
           <GameCanvas
@@ -152,17 +166,11 @@ export default function Home() {
             onSpinComplete={handleSpinComplete}
             onSpeedUpReady={(fn) => setOnSpeedUp(() => fn)}
             onOrdersAppear={() => {
-              // Scatter долетел — теперь показываем ордера в блоке заказов.
-              // Берём pendingOrders из движка и кладём в React state.
-              // preparedOrders — снапшот созданный в prepare(), не расходуется spin().
-              // Именно эти ордера показываем в момент прилёта scatter.
               const state = gameEngine.getState();
               const toShow = state.preparedOrders.length > 0
                 ? state.preparedOrders
                 : state.orders;
               setPendingOrders(toShow);
-              // Запускаем анимацию появления карточки и ждём (600ms).
-              // Каскады стартуют только после resolve.
               if (ordersAnimTriggerRef.current) {
                 return ordersAnimTriggerRef.current();
               }

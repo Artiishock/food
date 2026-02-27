@@ -1,0 +1,58 @@
+/* FreeSpinsBanner.css */
+
+.free-spins-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #fde047 0%, #f59e0b 50%, #fde047 100%);
+  border: 3px solid #ca8a04;
+  border-radius: 8px;
+  padding: 8px 24px;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5), 0 0 20px rgba(253, 224, 71, 0.3);
+  animation: fs-banner-glow 2s ease-in-out infinite;
+}
+
+@keyframes fs-banner-glow {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5), 0 0 20px rgba(253, 224, 71, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.8), 0 0 40px rgba(253, 224, 71, 0.6);
+  }
+}
+
+.free-spins-banner-top__icon {
+  font-size: 1.2rem;
+  animation: fs-spin 3s linear infinite;
+}
+
+@keyframes fs-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.2); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.free-spins-banner-top__label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #1f2937;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.free-spins-banner-top__count {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: #1f2937;
+  line-height: 1;
+  min-width: 2.5rem;
+  text-align: center;
+  animation: fs-count-bounce 0.3s ease-out;
+}
+
+@keyframes fs-count-bounce {
+  0% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
