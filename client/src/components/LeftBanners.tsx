@@ -41,7 +41,7 @@ export default function LeftBanners({
         </div>
       ) : (
         <div className="banner-card">
-          <div className="banner-title">Standard FS Package</div>
+          <div className="banner-title">BIG FS Package</div>
           <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>10 free spins</div>
           <button
             className="buy-button standard"
@@ -61,7 +61,7 @@ export default function LeftBanners({
         </div>
       ) : (
         <div className="banner-card">
-          <div className="banner-title">Cheap FS Package</div>
+          <div className="banner-title">STANDARD FS Package</div>
           <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>5 free spins</div>
           <button
             className="buy-button cheap"

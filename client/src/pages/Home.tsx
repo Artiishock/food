@@ -1,14 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import GameCanvas from '../components/GameCanvas';
 import GameLayout from '../components/GameLayout';
 import BottomControlBar from '../components/BottomControlBar';
 import LeftBanners from '../components/LeftBanners';
 import OrdersDisplay from '../components/OrdersDisplay';
-import TipsNotification from '../components/TipsNotification'; // ← НОВЫЙ ИМПОРТ
+import TipsNotification from '../components/TipsNotification';
 import { GameEngine, Order } from '../lib/gameEngine';
-import symbolsConfig from '../config/symbols.json'; // ← НОВЫЙ ИМПОРТ
-import gameConfig from '../config/gameConfig.json'; // ← НОВЫЙ ИМПОРТ
-import '../styles/orders.css'; // ← НОВЫЙ ИМПОРТ
+import symbolsConfig from '../config/symbols.json';
+import gameConfig from '../config/gameConfig.json';
+import '../styles/orders.css';
 
 export default function Home() {
   const gameEngine = useMemo(() => new GameEngine(), []);
@@ -16,63 +16,72 @@ export default function Home() {
   const [isSpinning, setIsSpinning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // ═══ НОВЫЙ STATE ДЛЯ TIPS NOTIFICATION ═══
   const [showTipsNotification, setShowTipsNotification] = useState(false);
   const [completedOrdersForNotif, setCompletedOrdersForNotif] = useState<Order[]>([]);
   const [superBonusAwarded, setSuperBonusAwarded] = useState(false);
   const [superBonusAmount, setSuperBonusAmount] = useState(0);
-  // ════════════════════════════════════════
-  
 
-// 1. Новый state рядом с остальными:
-const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
+  const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
+  const [isFast, setIsFast] = useState(false);
+
+  // Ордера подготовленные ЗАРАНЕЕ — до начала анимации барабанов.
+  // Они показываются в блоке заказов в момент когда scatter долетает,
+  // ещё до того как начались каскады.
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [lastWin, setLastWin] = useState(0);
+
+  // Ref хранит triggerFn из OrdersDisplay.
+  // Когда scatter долетает до блока заказов — GameCanvas вызывает onOrdersAppear(),
+  // которая вызывает этот триггер и ЖДЁТ его Promise прежде чем запустить каскады.
+  const ordersAnimTriggerRef = useRef<(() => Promise<void>) | null>(null);
 
   const handleSpin = async () => {
     if (isSpinning) return;
-    
+    setLastWin(0);
+    setIsFast(false);
     try {
+      // Готовим сетку и ордера заранее, но НЕ показываем их в UI.
+      // Ордера появятся только когда scatter долетит до блока заказов.
+      gameEngine.prepare();
+
       setIsSpinning(true);
-      const result = await gameEngine.spin();
-      // State will be updated in handleSpinComplete
+      await gameEngine.spin();
     } catch (error) {
       console.error('Spin error:', error);
       setIsSpinning(false);
+      setPendingOrders([]);
       setGameState(gameEngine.getState());
     }
   };
 
   const handleSpinComplete = () => {
+    console.log("[Home] handleSpinComplete called, isFast will be reset");
     setIsSpinning(false);
+    setIsFast(false);
+    // Все каскады завершены — старые ордера больше не нужны отдельно.
+    // gameState.orders теперь содержит актуальное состояние (включая новые ордера).
+    // Очищаем pendingOrders чтобы убрать дубли.
+    setPendingOrders([]);
     const newState = gameEngine.getState();
     setGameState(newState);
+    setLastWin(newState.totalWin ?? 0);
 
-    // ═══ НОВАЯ ЛОГИКА: Проверка завершенных заказов ═══
     const completed = newState.orders.filter(o => o.completed);
-    
     if (completed.length > 0) {
-      console.log('✅ Orders completed:', completed);
-      
-      // Проверяем Super Bonus (все заказы выполнены после Free Spins)
-      const allCompleted = newState.orders.length > 0 && 
+      const allCompleted = newState.orders.length > 0 &&
                            newState.orders.every(o => o.completed) &&
-                           !newState.isFreeSpins && 
+                           !newState.isFreeSpins &&
                            newState.freeSpinsRemaining === 0;
-      
-      const superBonus = allCompleted 
-        ? newState.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier 
+
+      const superBonus = allCompleted
+        ? newState.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier
         : 0;
-      
-      if (superBonus > 0) {
-        console.log('🎉 SUPER BONUS AWARDED:', superBonus);
-      }
-      
-      // Показываем уведомление
+
       setCompletedOrdersForNotif(completed);
       setSuperBonusAwarded(allCompleted);
       setSuperBonusAmount(superBonus);
       setShowTipsNotification(true);
     }
-    // ═══════════════════════════════════════════════════
   };
 
   const handleBetIncrease = () => {
@@ -101,14 +110,12 @@ const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
     setGameState(gameEngine.getState());
   };
 
-  // ═══ НОВЫЙ HANDLER ДЛЯ ЗАКРЫТИЯ NOTIFICATION ═══
   const handleTipsNotificationComplete = () => {
     setShowTipsNotification(false);
     setCompletedOrdersForNotif([]);
     setSuperBonusAwarded(false);
     setSuperBonusAmount(0);
   };
-  // ═════════════════════════════════════════════════
 
   if (!gameState) {
     return <div className="text-center p-8">Loading...</div>;
@@ -118,14 +125,49 @@ const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
     <>
       <GameLayout
         logo={<div className="text-4xl font-black italic tracking-tighter text-center">FOOD<br/>SLOTS</div>}
-        orders={<OrdersDisplay orders={gameState.orders} />}
+        orders={
+          <OrdersDisplay
+            orders={[
+              // Старые ордера показываем до конца спина — они ещё могут выполниться в каскадах.
+              // Новые (pending) появляются когда scatter долетел, но рядом со старыми.
+              // После handleSpinComplete pendingOrders очищается и остаётся только gameState.orders.
+              ...gameState.orders,
+              ...pendingOrders.filter(p =>
+                // не дублируем если ордер уже есть в gameState (после спина)
+                !gameState.orders.some(o => o.symbolId === p.symbolId && o.quantity === p.quantity && o.collected === 0)
+              )
+            ]}
+            onReadyToShow={(triggerFn) => {
+              // OrdersDisplay регистрирует свою анимацию-триггер здесь.
+              // GameCanvas будет вызывать её когда scatter долетает к блоку заказов.
+              ordersAnimTriggerRef.current = triggerFn;
+            }}
+          />
+        }
         gameBoard={
           <GameCanvas
             gameEngine={gameEngine}
             isSpinning={isSpinning}
             soundEnabled={soundEnabled}
             onSpinComplete={handleSpinComplete}
-            onSpeedUpReady={(fn) => setOnSpeedUp(() => fn)} 
+            onSpeedUpReady={(fn) => setOnSpeedUp(() => fn)}
+            onOrdersAppear={() => {
+              // Scatter долетел — теперь показываем ордера в блоке заказов.
+              // Берём pendingOrders из движка и кладём в React state.
+              // preparedOrders — снапшот созданный в prepare(), не расходуется spin().
+              // Именно эти ордера показываем в момент прилёта scatter.
+              const state = gameEngine.getState();
+              const toShow = state.preparedOrders.length > 0
+                ? state.preparedOrders
+                : state.orders;
+              setPendingOrders(toShow);
+              // Запускаем анимацию появления карточки и ждём (600ms).
+              // Каскады стартуют только после resolve.
+              if (ordersAnimTriggerRef.current) {
+                return ordersAnimTriggerRef.current();
+              }
+              return Promise.resolve();
+            }}
           />
         }
         leftBanners={
@@ -151,12 +193,13 @@ const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
             onInfo={() => console.log('Info')}
             soundEnabled={soundEnabled}
             onToggleSound={() => setSoundEnabled(!soundEnabled)}
-            onSpeedUp={onSpeedUp ?? undefined} 
+            onSpeedUp={onSpeedUp ? () => { onSpeedUp(); setIsFast(v => !v); } : undefined}
+            isFast={isFast}
+            lastWin={lastWin}
           />
         }
       />
 
-      {/* ═══ НОВЫЙ КОМПОНЕНТ: Tips Notification ═══ */}
       {showTipsNotification && (
         <TipsNotification
           completedOrders={completedOrdersForNotif}
@@ -168,7 +211,6 @@ const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
           onComplete={handleTipsNotificationComplete}
         />
       )}
-      {/* ═════════════════════════════════════════ */}
     </>
   );
 }

@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react';
 import { Order } from '../lib/gameEngine';
 import { SHEET_FRAMES, SHEET_W, SHEET_H } from '../config/spriteFrames';
 import './OrdersDisplay.css';
 
 interface OrdersDisplayProps {
   orders: Order[];
+  onReadyToShow?: (triggerFn: () => Promise<void>) => void;
 }
 
 const ICON_SIZE = 60;
@@ -48,13 +50,35 @@ function SymbolIcon({ symbolId }: { symbolId: string }) {
   );
 }
 
-export default function OrdersDisplay({ orders }: OrdersDisplayProps) {
+export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayProps) {
+  const [isFlashing, setIsFlashing] = useState(false);
+
+  // Регистрируем функцию-триггер у родителя.
+  // Родитель вызовет её когда scatter долетит — она запустит анимацию
+  // и вернёт Promise который резолвится после 600ms (длина анимации).
+  // GameCanvas ждёт этот Promise перед запуском каскадов.
+  useEffect(() => {
+    const triggerFn = (): Promise<void> => {
+      return new Promise(resolve => {
+        setIsFlashing(false);
+        // Небольшой таймаут чтобы React сбросил класс и анимация сыграла заново
+        requestAnimationFrame(() => {
+          setIsFlashing(true);
+          setTimeout(() => {
+            setIsFlashing(false);
+            resolve();  // каскады могут начинаться
+          }, 600);
+        });
+      });
+    };
+    onReadyToShow?.(triggerFn);
+  }, [onReadyToShow]);
   if (orders.length === 0) {
     return null;
   }
 
   return (
-    <div className="orders-display">
+    <div className={`orders-display${isFlashing ? ' orders-display--flash' : ''}`}>
       <div className="orders-display__title">ACTIVE ORDERS</div>
 
       {orders.map((order, index) => {

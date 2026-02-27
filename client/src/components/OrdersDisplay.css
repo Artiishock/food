@@ -121,3 +121,28 @@
   font-size: 0.875rem; /* text-sm */
   font-weight: 700;
 }
+
+/* Добавить в OrdersDisplay.css */
+
+/* Вспышка блока заказов когда scatter долетел */
+@keyframes orders-flash {
+  0%   { box-shadow: 0 0 0px 0px rgba(255, 204, 0, 0); }
+  20%  { box-shadow: 0 0 30px 12px rgba(255, 204, 0, 0.85); }
+  50%  { box-shadow: 0 0 20px 8px rgba(255, 180, 0, 0.6); }
+  100% { box-shadow: 0 0 0px 0px rgba(255, 204, 0, 0); }
+}
+
+@keyframes order-card-pop {
+  0%   { transform: scale(1) rotate(var(--card-rot, -1deg)); }
+  40%  { transform: scale(1.08) rotate(var(--card-rot, -1deg)); }
+  70%  { transform: scale(0.97) rotate(var(--card-rot, -1deg)); }
+  100% { transform: scale(1) rotate(var(--card-rot, -1deg)); }
+}
+
+.orders-display--flash {
+  animation: orders-flash 0.8s ease-out forwards;
+}
+
+.orders-display--flash .order-card {
+  animation: order-card-pop 0.5s ease-out 0.15s forwards;
+}

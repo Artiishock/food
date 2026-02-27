@@ -41,7 +41,7 @@ export default function GameLayout({
 
           {/* Orders Block */}
           <div className="orders-box">
-            <div className="orders-title">Блок "Заказы"</div>
+            <div className="orders-title"></div>
             {orders}
           </div>
         </div>

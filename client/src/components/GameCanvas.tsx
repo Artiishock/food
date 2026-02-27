@@ -11,6 +11,7 @@ interface GameCanvasProps {
   soundEnabled?: boolean;
   onSpinComplete?: (result: any) => void;
   onSpeedUpReady?: (speedUp: () => void) => void;
+  onOrdersAppear?: () => Promise<void>;   // Promise: каскады стартуют только после resolve
 }
 
 const CANVAS_W = 800;
@@ -44,13 +45,15 @@ interface Reel {
   spinning:  boolean;
 }
 
-export default function GameCanvas({ gameEngine, isSpinning = false, soundEnabled = true, onSpinComplete, onSpeedUpReady }: GameCanvasProps) {
+export default function GameCanvas({ gameEngine, isSpinning = false, soundEnabled = true, onSpinComplete, onSpeedUpReady, onOrdersAppear }: GameCanvasProps) {
   const mountRef      = useRef<HTMLDivElement>(null);
   const appRef        = useRef<PIXI.Application | null>(null);
   const reelsRef      = useRef<Reel[]>([]);
   const fxLayerRef    = useRef<PIXI.Container | null>(null);
   const textureMap    = useRef<Map<string, PIXI.Texture>>(new Map());
-  const busyRef       = useRef(false);
+  const busyRef            = useRef(false);
+  const onSpinCompleteRef  = useRef(onSpinComplete);
+  const onOrdersAppearRef  = useRef(onOrdersAppear);
   const { play, setMuted } = useGameSounds();
   const stopSpin      = useRef<(() => void) | null>(null);
   const speedMultRef  = useRef(1);
@@ -60,6 +63,10 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
   useEffect(() => {
     setMuted(!soundEnabled);
   }, [soundEnabled]);
+
+  // Держим ref актуальным при каждом рендере — избегаем stale closure в async runSpinSequence
+  onSpinCompleteRef.current  = onSpinComplete;
+  onOrdersAppearRef.current  = onOrdersAppear;
 
   const speedUp = useCallback(() => {
     if (!busyRef.current) return;
@@ -201,11 +208,12 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
     stopSpin.current = play('spin') ?? null;
     try {
       await animateReels(initialGrid);
-      await sleep(250);
+      await sleep(250 / speedMultRef.current);
       for (const step of cascadeSteps) await doCascade(step);
     } finally {
+      console.log("[GameCanvas] runSpinSequence finally, calling onSpinComplete");
       busyRef.current = false;
-      onSpinComplete?.({});
+      onSpinCompleteRef.current?.({});
     }
   };
 
@@ -241,7 +249,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
       const tick = (ticker: PIXI.Ticker) => {
         const spd = speedMultRef.current;
-        elapsed += ticker.deltaTime * (1000 / 60) * spd;
+        elapsed += ticker.elapsedMS * spd;
         let allStopped = true;
 
         for (let col = 0; col < COLS; col++) {
@@ -320,6 +328,14 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
   };
 
   const doCascade = async (step: any) => {
+    if (step.isScatterStep) {
+      const scatterPositions = new Set<string>(
+        (step.scatterCells as GridCell[]).map((c: GridCell) => `${c.row}-${c.col}`)
+      );
+      await animateScatterFly(scatterPositions, step.gridAfterFill as GridCell[][]);
+      return;
+    }
+
     const winPositions = new Set<string>();
     (step.wins as WinInfo[]).forEach(w => w.cells.forEach(c => winPositions.add(`${c.row}-${c.col}`)));
     if (step.gridBeforeRemoval) {
@@ -336,6 +352,124 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
     await dropAndFill(step.gridAfterFill as GridCell[][], step.gridBeforeRemoval as GridCell[][], winPositions);
     await sleep(180 / speedMultRef.current);
   };
+
+  const animateScatterFly = (positions: Set<string>, gridAfterFill: GridCell[][]): Promise<void> =>
+    new Promise(resolve => {
+      const app = appRef.current!;
+      const fx  = fxLayerRef.current!;
+
+      const TARGET_X = CANVAS_W + 160;
+      const TARGET_Y = CANVAS_H / 2;
+
+      type ScatterItem = {
+        sprite:    PIXI.Sprite;
+        glow:      PIXI.Graphics;
+        startX:    number;
+        startY:    number;
+        baseScale: number;
+        phase:     'grow' | 'fly';
+        t:         number;
+        done:      boolean;
+      };
+
+      const items: ScatterItem[] = [];
+
+      positions.forEach(pos => {
+        const slot = getSlotAt(pos);
+        if (!slot) return;
+
+        const [row, col] = pos.split('-').map(Number);
+        const startX = col * CW + CW / 2;
+        const startY = row * CH + CH / 2;
+
+        const glow = new PIXI.Graphics();
+        glow.circle(0, 0, CW * 0.55).fill({ color: 0xffcc00, alpha: 0.35 });
+        glow.position.set(startX, startY);
+        fx.addChild(glow);
+
+        const sprite = new PIXI.Sprite(slot.sprite.texture);
+        sprite.anchor.set(0.5);
+        sprite.position.set(startX, startY);
+        sprite.scale.set(slot.sprite.scale.x, slot.sprite.scale.y);
+        fx.addChild(sprite);
+
+        slot.container.visible = false;
+
+        items.push({
+          sprite, glow,
+          startX, startY,
+          baseScale: slot.sprite.scale.x,
+          phase: 'grow',
+          t: 0,
+          done: false,
+        });
+      });
+
+      if (items.length === 0) { resolve(); return; }
+
+      const GROW_DUR = 320;
+      const FLY_DUR  = 600;
+
+      const tick = (ticker: PIXI.Ticker) => {
+        const spd = speedMultRef.current;
+        const dt  = ticker.elapsedMS;       // реальное время кадра в мс
+
+        items.forEach(item => {
+          if (item.done) return;
+          item.t += dt * spd;
+
+          if (item.phase === 'grow') {
+            const p = Math.min(item.t / GROW_DUR, 1);
+            const scale = 1 + Math.sin(p * Math.PI) * 0.8;
+            item.sprite.scale.set(item.baseScale * scale);
+            item.glow.scale.set(scale);
+            item.glow.clear();
+            item.glow.circle(0, 0, CW * 0.55 * scale).fill({ color: 0xffcc00, alpha: 0.25 + p * 0.4 });
+
+            if (p >= 1) {
+              item.phase = 'fly';
+              item.t = 0;
+              spawnParticles(item.startX, item.startY);
+            }
+
+          } else {
+            const p = Math.min(item.t / FLY_DUR, 1);
+            const ease = p * p * p;
+
+            const x = item.startX + (TARGET_X - item.startX) * ease;
+            const arc = Math.sin(p * Math.PI) * -30;
+            const y = item.startY + (TARGET_Y - item.startY) * ease * 0.3 + arc;
+
+            item.sprite.position.set(x, y);
+            item.glow.position.set(x, y);
+
+            const shrink = 1.6 * (1 - ease * 0.7);
+            item.sprite.scale.set(item.baseScale * shrink);
+            item.glow.scale.set(shrink);
+            item.sprite.alpha = 1 - ease * ease;
+            item.glow.alpha   = 1 - ease * ease;
+
+            if (p >= 1) {
+              item.done = true;
+              item.sprite.destroy();
+              item.glow.destroy();
+            }
+          }
+        });
+
+        if (items.every(i => i.done)) {
+          app.ticker.remove(tick);
+          // Ждём пока UI покажет ордер — но не дольше 1.5с (защита от зависания)
+          const uiPromise = onOrdersAppearRef.current ? onOrdersAppearRef.current() : Promise.resolve();
+          const timeout   = new Promise<void>(r => setTimeout(r, 1500));
+          Promise.race([uiPromise, timeout]).then(() => {
+            dropAndFill(gridAfterFill, gridAfterFill, positions).then(() => resolve());
+          });
+        }
+      };
+
+      app.ticker.add(tick);
+    });
 
   const highlightCells = (positions: Set<string>): Promise<void> =>
     new Promise(resolve => {
@@ -384,15 +518,16 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
         items.push({ sprite, bg, startX, startY, baseScale: slot.sprite.scale.x, phase: 'grow', t: 0, done: false });
       });
 
-      const GROW_DUR = 400 / spd;
-      const FLY_DUR  = 500 / spd;
+      const GROW_DUR = 400;
+      const FLY_DUR  = 500;
 
       const tick = (ticker: PIXI.Ticker) => {
-        const dt = ticker.deltaTime * (1000 / 60);
+        const spd = speedMultRef.current;
+        const dt  = ticker.elapsedMS;
 
         items.forEach(item => {
           if (item.done) return;
-          item.t += dt;
+          item.t += dt * spd;
 
           if (item.phase === 'grow') {
             const p = Math.min(item.t / GROW_DUR, 1);
@@ -513,17 +648,20 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
       if (items.length === 0) { resolve(); return; }
 
-      const spd2 = speedMultRef.current;
       const tick = (ticker: PIXI.Ticker) => {
+        const spd2 = speedMultRef.current;            // актуальная скорость каждый кадр
+        const dt   = ticker.elapsedMS / (1000 / 60); // нормализуем к 60fps
         let allDone = true;
         items.forEach(item => {
           if (item.landed) return;
-          item.vy += GRAVITY * spd2;
-          item.slot.container.y += item.vy;
+          item.vy += GRAVITY * spd2 * dt;
+          item.slot.container.y += item.vy * dt;
           if (item.slot.container.y >= item.targetY) {
             item.slot.container.y = item.targetY;
-            item.vy = -(item.vy * BOUNCE);
-            if (Math.abs(item.vy) < 0.6) {
+            const effectiveBounce = BOUNCE / spd2;          // при ускорении меньше отскок
+            const stopThreshold   = 0.6 * Math.sqrt(spd2);  // выше порог остановки
+            item.vy = -(item.vy * effectiveBounce);
+            if (Math.abs(item.vy) < stopThreshold) {
               item.vy = 0;
               item.slot.container.y = item.targetY;
               item.landed = true;
@@ -558,7 +696,8 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
     }
     const tick = (ticker: PIXI.Ticker) => {
       let alive = false;
-      particles.forEach(p => { if (p.life <= 0) return; alive = true; p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.life -= 0.025; p.alpha = Math.max(0, p.life); });
+      const dt = ticker.elapsedMS / (1000 / 60);
+      particles.forEach(p => { if (p.life <= 0) return; alive = true; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 0.18 * dt; p.life -= 0.025 * dt; p.alpha = Math.max(0, p.life); });
       if (!alive) { app.ticker.remove(tick); particles.forEach(p => p.destroy()); }
     };
     app.ticker.add(tick);
@@ -566,7 +705,14 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
   const getSlotAt   = (key: string) => { const [r, c] = key.split('-').map(Number); return getSlotAtRC(r, c); };
   const getSlotAtRC = (row: number, col: number) => reelsRef.current[col]?.slots[row + BUFFER] ?? null;
-  const sleep       = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+  const sleep = (ms: number) => new Promise<void>(r => {
+    // Проверяем скорость каждые 16ms чтобы реагировать на ускорение во время паузы
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      elapsed += 16 * speedMultRef.current;
+      if (elapsed >= ms) { clearInterval(interval); r(); }
+    }, 16);
+  });
   const lerpColor   = (a: number, b: number, t: number) => {
     const tc = Math.max(0, Math.min(1, t));
     const [ar,ag,ab] = [(a>>16)&0xff,(a>>8)&0xff,a&0xff];

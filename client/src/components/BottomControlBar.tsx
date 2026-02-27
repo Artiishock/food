@@ -18,7 +18,8 @@ interface BottomControlBarProps {
   onInfo?: () => void;
   soundEnabled?: boolean;
   onToggleSound?: () => void;
-  onSpeedUp?: () => void;       // функция ускорения из GameCanvas
+  onSpeedUp?: () => void;
+  lastWin?: number;
 }
 
 const AUTO_SPIN_OPTIONS = [5, 10, 25, 50, 100];
@@ -36,22 +37,17 @@ export default function BottomControlBar({
   soundEnabled = true,
   onToggleSound,
   onSpeedUp,
+  isFast: isFastProp = false,
+  lastWin = 0,
 }: BottomControlBarProps) {
   const [showAutoMenu, setShowAutoMenu]   = useState(false);
   const [autoSpinsLeft, setAutoSpinsLeft] = useState(0);
-  const [isFast, setIsFast]               = useState(false);
   const menuRef   = useRef<HTMLDivElement>(null);
   const isAutoRef = useRef(false);
 
   const formatMoney = (val: number) =>
     '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Сбрасываем isFast когда вращение завершилось
-  useEffect(() => {
-    if (!isSpinning) setIsFast(false);
-  }, [isSpinning]);
-
-  // Закрываем меню при клике вне
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -62,7 +58,6 @@ export default function BottomControlBar({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Следующий спин в автоцикле
   useEffect(() => {
     if (!isAutoRef.current || isSpinning || autoSpinsLeft <= 0) return;
     const timer = setTimeout(() => {
@@ -85,9 +80,11 @@ export default function BottomControlBar({
   };
 
   const handleSpeedUp = () => {
-    setIsFast(v => !v);
     onSpeedUp?.();
   };
+
+  // isFast управляется снаружи и имеет смысл только во время спина
+  const isEffectivelyFast = isFastProp && isSpinning;
 
   const isAuto = isAutoRef.current && (isSpinning || autoSpinsLeft > 0);
 
@@ -127,6 +124,15 @@ export default function BottomControlBar({
           <span className="info-label">CREDIT</span>
           <span className="info-value">{formatMoney(balance)}</span>
         </div>
+
+        {/* WIN блок — по центру */}
+        <div className="info-block win-block">
+          <span className="info-label win-label">WIN</span>
+          <span className={`info-value win-value${lastWin > 0 ? ' win-value--active' : ''}`}>
+            {lastWin > 0 ? formatMoney(lastWin) : '—'}
+          </span>
+        </div>
+
         <div className="info-block">
           <span className="info-label">BET</span>
           <div className="bet-block">
@@ -144,15 +150,15 @@ export default function BottomControlBar({
 
         {/* SPIN / SPEED кнопка */}
         <button
-          className={`spin-button ${isSpinning ? 'spin-button--spinning' : ''} ${isFast ? 'spin-button--fast' : ''}`}
+          className={`spin-button ${isSpinning ? 'spin-button--spinning' : ''} ${isEffectivelyFast ? 'spin-button--fast' : ''}`}
           onClick={isSpinning ? handleSpeedUp : onSpin}
           disabled={false}
-          aria-label={isSpinning ? (isFast ? 'Normal speed' : 'Speed up') : 'Spin'}
+          aria-label={isSpinning ? (isEffectivelyFast ? 'Normal speed' : 'Speed up') : 'Spin'}
         >
           {isSpinning ? (
             <span className="speed-btn-inner">
               <MdFastForward />
-              {isFast && <span className="speed-label">×4</span>}
+              {isEffectivelyFast && <span className="speed-label">×4</span>}
             </span>
           ) : (
             <ImSpinner11 />
@@ -171,7 +177,6 @@ export default function BottomControlBar({
             aria-label={isAuto ? 'Stop auto spin' : 'Auto spin'}
           >
             {isAuto ? (
-              // STOP с счётчиком
               <span className="auto-stop-inner">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor"/>
@@ -183,7 +188,6 @@ export default function BottomControlBar({
             )}
           </button>
 
-          {/* Выпадающее меню */}
           {showAutoMenu && (
             <div className="auto-spin-menu">
               <div className="auto-spin-menu__title">Auto Spins</div>

@@ -56,9 +56,9 @@ export default function BonusesPanel({
             disabled={balance < cheapPrice}
             className="w-full brutalist-border brutalist-shadow-hover bg-white text-black hover:bg-white text-xs disabled:opacity-50"
           >
-            <div>CHEAP</div>
+            <div>STANDARD</div>
             <div className="text-xs">${cheapPrice}</div>
-            <div className="text-xs">5 spins</div>
+            <div className="text-xs">10 spins</div>
           </Button>
           
           <Button
@@ -71,7 +71,7 @@ export default function BonusesPanel({
             disabled={balance < standardPrice}
             className="w-full brutalist-border brutalist-shadow-hover bg-white text-black hover:bg-white text-xs disabled:opacity-50"
           >
-            <div>STANDARD</div>
+            <div>BIG </div>
             <div className="text-xs">${standardPrice}</div>
             <div className="text-xs">10 spins</div>
           </Button>
