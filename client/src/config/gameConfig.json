@@ -7,9 +7,9 @@
         "freeSpins": 0
       },
       "4": {
-        "label": "mini bonus",
+        "label": "standard bonus",
         "orders": 3,
-        "freeSpins": 5
+        "freeSpins": 10
       },
       "5+": {
         "label": "big bonus",
@@ -49,7 +49,7 @@
     "spinsAwarded": 10,
     "cheapPackage": {
       "cost": 50,
-      "spins": 5,
+      "spins": 10,
       "tipMultipliers": [2, 3, 5, 10, 20],
       "maxOrders": 3
     },

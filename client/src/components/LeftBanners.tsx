@@ -35,16 +35,16 @@ export default function LeftBanners({
         </button>
       </div>
 
-      {/* Cheap package — 5 FS */}
+      {/* Cheap package — 10 FS (was incorrectly showing 5) */}
       <div className="banner-card">
         <div className="banner-title">STANDARD FS Package</div>
-        <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>5 free spins</div>
+        <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>10 free spins</div>
         <button
           className="buy-button cheap"
           onClick={() => onBuyFreeSpins('cheap')}
           disabled={isSpinning || isFreeSpins}
         >
-          BUY (50×) — 5 FS
+          BUY (50×) — 10 FS
         </button>
       </div>
 

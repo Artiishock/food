@@ -26,6 +26,7 @@ export interface Order {
   collected: number;
   tipMultiplier: number;
   completed: boolean;
+  isNew?: boolean;
 }
 
 export interface WinInfo {
@@ -45,7 +46,7 @@ export interface CascadeStep {
   gridAfterFill: GridCell[][];
 }
 
-export type BonusType = 'none' | 'order' | 'mini' | 'big';
+export type BonusType = 'none' | 'order' | 'standard' | 'big';
 
 export interface GameState {
   grid: GridCell[][];
@@ -63,6 +64,7 @@ export interface GameState {
   cascadeSteps: CascadeStep[];
   lastScatterCount: number;
   lastBonusType: BonusType;
+  triggeredPackageType: 'standard' | 'big' | null;
   // Track total orders completed during this free spins session
   freeSpinsTotalCompletedTips: number;
 }
@@ -101,6 +103,7 @@ export class GameEngine {
       cascadeSteps: [],
       lastScatterCount: 0,
       lastBonusType: 'none',
+      triggeredPackageType: null,
       freeSpinsTotalCompletedTips: 0,
     };
   }
@@ -214,7 +217,7 @@ export class GameEngine {
       this.state.lastBonusType = 'big';
       return this.buildOrders(5);
     } else if (scatterCount === 4) {
-      this.state.lastBonusType = 'mini';
+      this.state.lastBonusType = 'standard';
       return this.buildOrders(3);
     } else if (scatterCount >= 1) {
       this.state.lastBonusType = 'order';
@@ -265,6 +268,7 @@ export class GameEngine {
     this.state.cascadeSteps = [];
     this.state.lastBonusType = 'none';
     this.state.lastScatterCount = 0;
+    this.state.triggeredPackageType = null;
 
     if (this.state.pendingGrid) {
       this.state.grid = this.state.pendingGrid;
@@ -397,11 +401,13 @@ export class GameEngine {
     }
 
     if (scatterCount >= 5) {
+      // 5+ scatters → BIG FS Package (10 spins, 5-6 orders, no charge)
       this.state.lastBonusType = 'big';
       this.triggerBigBonus();
     } else if (scatterCount === 4) {
-      this.state.lastBonusType = 'mini';
-      this.triggerMiniBonus();
+      // 4 scatters → STANDARD FS Package (10 spins, 3 orders, no charge)
+      this.state.lastBonusType = 'standard';
+      this.triggerStandardBonus();
     } else if (scatterCount >= 1) {
       this.state.lastBonusType = 'order';
       this.generateOrdersFromScatter(1);
@@ -425,18 +431,30 @@ export class GameEngine {
     }
   }
 
-  private triggerMiniBonus(): void {
+  /**
+   * STANDARD FS Package — triggered by exactly 4 scatters.
+   * 10 free spins, 3 orders, NO balance deduction.
+   */
+  private triggerStandardBonus(): void {
     this.state.isFreeSpins = true;
-    this.state.freeSpinsRemaining = 5;
+    this.state.freeSpinsRemaining = 10;
     this.state.freeSpinsTotalCompletedTips = 0;
+    this.state.triggeredPackageType = 'standard';
     this.generateOrdersFromScatter(3);
   }
 
+  /**
+   * BIG FS Package — triggered by 5+ scatters.
+   * 10 free spins, 5-6 orders, NO balance deduction.
+   */
   private triggerBigBonus(): void {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = 10;
     this.state.freeSpinsTotalCompletedTips = 0;
-    this.generateOrdersFromScatter(5);
+    this.state.triggeredPackageType = 'big';
+    // 5 or 6 orders for big bonus
+    const orderCount = Math.random() < 0.5 ? 5 : 6;
+    this.generateOrdersFromScatter(orderCount);
   }
 
   private findWinningCombinations(grid: GridCell[][]): WinInfo[] {
@@ -557,7 +575,9 @@ export class GameEngine {
       }
       // Replace completed orders with new ones
       for (const idx of completedIndices) {
-        this.state.orders[idx] = this.buildSingleOrder();
+        const newOrder = this.buildSingleOrder();
+        newOrder.isNew = true;
+        this.state.orders[idx] = newOrder;
       }
     } else {
       for (const order of this.state.orders) {
@@ -581,6 +601,10 @@ export class GameEngine {
     this.state.orders = [];
   }
 
+  /**
+   * Manual purchase of free spins — deducts balance.
+   * Sets triggeredPackageType for showing FreeSpinsIntro overlay.
+   */
   public buyFreeSpins(packageType: 'cheap' | 'standard'): void {
     const pkg = packageType === 'cheap'
       ? gameConfig.freeSpins.cheapPackage
@@ -594,6 +618,7 @@ export class GameEngine {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = pkg.spins;
     this.state.freeSpinsTotalCompletedTips = 0;
+    this.state.triggeredPackageType = packageType === 'cheap' ? 'standard' : 'big';
 
     const orderCount = Math.min(pkg.maxOrders, 5);
     this.generateOrdersFromScatter(orderCount);
