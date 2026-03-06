@@ -1,38 +1,48 @@
-/* LeftBanners.css */
+/* LeftBanners.css — Fully Responsive */
 
+/* ─── Banner Card ─────────────────────────────────────────────── */
 .banner-card {
   background-color: #ffffff;
-  padding: 1rem 1.5rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  height: 8rem;
+  padding: clamp(6px, 1vw, 16px) clamp(8px, 1.2vw, 20px);
+  border-radius: clamp(4px, 0.6vw, 8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
   justify-content: center;
+  flex: 1;
+  min-height: clamp(64px, 9vw, 120px);
+  box-sizing: border-box;
 }
 
 .banner-title {
-  font-size: 0.75rem;
+  font-size: clamp(8px, 1vw, 12px);
   font-weight: 700;
   color: #374151;
-  margin-bottom: 4px;
+  margin-bottom: clamp(2px, 0.4vw, 5px);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* FS Buy Buttons */
+/* ─── Buy buttons ─────────────────────────────────────────────── */
 .buy-button {
-  margin-top: 0.25rem;
-  font-size: 0.7rem;
+  margin-top: clamp(2px, 0.4vw, 5px);
+  font-size: clamp(7px, 0.85vw, 11px);
   font-weight: 700;
-  padding: 0.45rem 0.75rem;
+  padding: clamp(4px, 0.6vw, 8px) clamp(4px, 0.6vw, 10px);
   border: none;
-  border-radius: 0.375rem;
+  border-radius: 4px;
   color: #ffffff;
   cursor: pointer;
   transition: background-color 0.2s, transform 0.1s;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .buy-button:active {
@@ -60,21 +70,22 @@
   background-color: #16a34a;
 }
 
-/* Free Spins Active Banner */
+/* ─── Free Spins Active Banner ────────────────────────────────── */
 .free-spins-banner {
   background-color: #fde047;
-  padding: 1.5rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  height: 8rem;
+  padding: clamp(8px, 1.2vw, 20px);
+  border-radius: clamp(4px, 0.6vw, 8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   justify-content: center;
   border: 2px solid #eab308;
+  flex: 1;
+  min-height: clamp(64px, 9vw, 120px);
 }
 
 .free-spins-title {
-  font-size: 1rem;
+  font-size: clamp(8px, 1vw, 14px);
   font-weight: 700;
   color: #1f2937;
   text-transform: uppercase;
@@ -82,29 +93,28 @@
 }
 
 .free-spins-count {
-  font-size: 2rem;
+  font-size: clamp(18px, 2.5vw, 36px);
   font-weight: 900;
   color: #1f2937;
-  margin-top: 0.25rem;
+  margin-top: clamp(2px, 0.4vw, 5px);
   line-height: 1;
 }
 
-/* ──────────────────────────────
-   Ante Toggle Switch
-────────────────────────────── */
+/* ─── Ante Toggle ─────────────────────────────────────────────── */
 .ante-toggle-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  gap: clamp(4px, 0.8vw, 10px);
+  margin-top: clamp(4px, 0.8vw, 10px);
+  flex-wrap: wrap;
 }
 
 .ante-label {
-  font-size: 0.85rem;
+  font-size: clamp(8px, 1vw, 13px);
   font-weight: 700;
   color: #9ca3af;
   transition: color 0.2s;
-  min-width: 2.2rem;
+  min-width: clamp(16px, 2vw, 30px);
   text-align: center;
 }
 
@@ -112,12 +122,12 @@
   color: #111827;
 }
 
-/* The pill track */
+/* Pill track */
 .ante-switch {
   position: relative;
-  width: 44px;
-  height: 24px;
-  border-radius: 12px;
+  width: clamp(30px, 4vw, 48px);
+  height: clamp(16px, 2.2vw, 26px);
+  border-radius: 999px;
   border: none;
   cursor: pointer;
   padding: 0;
@@ -138,23 +148,93 @@
   cursor: default;
 }
 
-/* The moving thumb */
+/* Thumb */
 .ante-switch-thumb {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: clamp(11px, 1.5vw, 20px);
+  height: clamp(11px, 1.5vw, 20px);
   background: #ffffff;
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   position: absolute;
-  top: 3px;
+  top: 50%;
+  transform: translateY(-50%);
   transition: left 0.25s ease;
 }
 
 .ante-switch--off .ante-switch-thumb {
-  left: 3px;
+  left: clamp(2px, 0.3vw, 4px);
 }
 
 .ante-switch--on .ante-switch-thumb {
-  left: 23px;
+  left: calc(100% - clamp(11px, 1.5vw, 20px) - clamp(2px, 0.3vw, 4px));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLET ≤ 900px — горизонтальное расположение карточек
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .banner-card,
+  .free-spins-banner {
+    min-height: clamp(56px, 10vw, 90px);
+    flex-direction: row;
+    align-items: center;
+    gap: clamp(6px, 1.5vw, 14px);
+    padding: clamp(6px, 1.5vw, 12px);
+  }
+
+  .banner-title {
+    white-space: nowrap;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  .buy-button {
+    margin-top: 0;
+    flex-shrink: 0;
+    width: auto;
+    min-width: clamp(60px, 10vw, 120px);
+  }
+
+  .free-spins-title {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  .free-spins-count {
+    margin-top: 0;
+  }
+
+  .ante-toggle-row {
+    margin-top: 0;
+    flex-wrap: nowrap;
+  }
+
+  /* Скрываем длинные тексты — только переключатель */
+  .ante-label {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE ≤ 600px
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .banner-card,
+  .free-spins-banner {
+    min-height: clamp(48px, 12vw, 70px);
+    padding: clamp(5px, 2vw, 10px);
+    gap: clamp(4px, 1.5vw, 8px);
+  }
+
+  .banner-title {
+    font-size: clamp(7px, 2vw, 10px);
+    letter-spacing: 0;
+  }
+
+  .buy-button {
+    font-size: clamp(7px, 2vw, 10px);
+    padding: clamp(3px, 1vw, 6px) clamp(4px, 1.5vw, 8px);
+    min-width: clamp(48px, 14vw, 90px);
+  }
 }

@@ -1,34 +1,35 @@
+/* BottomControlBar.css — Fully Responsive */
+
 .bottom-control-bar {
   position: relative;
   width: 100%;
-  height: 80px;
-  background: linear-gradient(to top, rgba(6,6,6,0.9) 0%, rgba(6,6,6,0) 100%);
+  height: clamp(56px, 8vh, 88px);
+  background: linear-gradient(to top, rgba(6,6,6,0.95) 0%, rgba(6, 6, 6, 0) 100%);
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 clamp(8px, 2vw, 28px);
   box-sizing: border-box;
   gap: 0;
-}
-
-/* Левая группа кнопок */
-.left-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   flex-shrink: 0;
 }
 
-/* Стек для Settings и Sound */
+/* ─── Левая группа ────────────────────────────────────────────── */
+.left-group {
+  display: flex;
+  align-items: center;
+  gap: clamp(4px, 1vw, 12px);
+  flex-shrink: 0;
+}
+
 .icon-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: clamp(3px, 0.6vw, 8px);
 }
 
-/* Базовая круглая кнопка */
 .icon-button {
-  width: 24px;
-  height: 24px;
+  width:  clamp(18px, 2.5vw, 28px);
+  height: clamp(18px, 2.5vw, 28px);
   border-radius: 50%;
   background: rgba(0,0,0,0.45);
   border: 1px solid #9F9F9F;
@@ -37,6 +38,7 @@
   justify-content: center;
   cursor: pointer;
   padding: 0;
+  font-size: clamp(9px, 1.2vw, 14px);
 }
 
 .icon-button:disabled {
@@ -44,10 +46,9 @@
   cursor: default;
 }
 
-/* Большая кнопка Info */
 .info-button {
-  width: 49px;
-  height: 49px;
+  width:  clamp(32px, 4.5vw, 54px);
+  height: clamp(32px, 4.5vw, 54px);
   border-radius: 50%;
   background: rgba(0,0,0,0.45);
   border: 1px solid #9F9F9F;
@@ -57,88 +58,108 @@
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  
 }
 
-/* Центральная область с кредитами и ставкой */
+.info-button svg {
+  width:  clamp(12px, 1.8vw, 22px);
+  height: clamp(12px, 1.8vw, 22px);
+}
+
+/* ─── Центральная группа ──────────────────────────────────────── */
 .center-group {
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between ;
-  gap: 48px;
-  padding: 0px 50px ;
+  justify-content: space-between;
+  gap: clamp(8px, 2vw, 48px);
+  padding: 0 clamp(8px, 2vw, 50px);
+  min-width: 0;
 }
 
-/* Общий стиль для блоков CREDIT и BET */
 .info-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-
   line-height: 1;
+  min-width: 0;
 }
 
-
-
-.info-label {
+.info-label,
+.info-label_bet {
   font-family: sans-serif;
-  font-size: 16px;
+  font-size: clamp(8px, 1.2vw, 16px);
   font-weight: 700;
   letter-spacing: 0.08em;
   color: #FACB32;
   text-transform: uppercase;
   margin-bottom: 2px;
- 
-  justify-content: start;
 }
 
 .info-label_bet {
-  font-family: sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #FACB32;
-  text-transform: uppercase;
-  margin-bottom: 2px;
   display: flex;
   justify-content: start;
 }
 
 .info-value {
   font-family: sans-serif;
-  font-size: 26px;
+  font-size: clamp(12px, 2.2vw, 28px);
   font-weight: 700;
   color: #FFFFFF;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
-/* Блок ставки (с кнопками +/‑) */
+/* WIN block */
+.win-block {}
+
+.win-label {}
+
+.win-value {
+  transition: color 0.3s, transform 0.2s;
+}
+
+.win-value--active {
+  color: #00ff88;
+  animation: win-pop 0.3s ease-out;
+}
+
+@keyframes win-pop {
+  0%   { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+/* ─── Блок ставки ─────────────────────────────────────────────── */
 .bet-block {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: clamp(4px, 0.8vw, 10px);
 }
 
 .bet-value {
   font-family: sans-serif;
-  font-size: 26px;
+  font-size: clamp(12px, 2.2vw, 28px);
   font-weight: 700;
   color: #FFFFFF;
   letter-spacing: -0.01em;
-  min-width: 90px;
+  min-width: clamp(50px, 7vw, 100px);
   text-align: center;
+  white-space: nowrap;
 }
 
-/* Кнопки увеличения/уменьшения ставки */
+.btngrup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .bet-adjust-button {
-  width: 24px;
-  height: 24px;
+  width:  clamp(16px, 2vw, 26px);
+  height: clamp(16px, 2vw, 26px);
   border-radius: 50%;
   background: rgba(0,0,0,0.5);
   border: 1px solid #666;
   color: #fff;
-  font-size: 20px;
+  font-size: clamp(12px, 1.6vw, 20px);
   font-weight: 300;
   display: flex;
   align-items: center;
@@ -153,24 +174,22 @@
   cursor: default;
 }
 
-/* Правая группа */
+/* ─── Правая группа ───────────────────────────────────────────── */
 .right-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: clamp(4px, 0.8vw, 10px);
   flex-shrink: 0;
 }
 
-
-
-/* Большая кнопка SPIN */
+/* SPIN кнопка */
 .spin-button {
-  width: 56px;
-  height: 56px;
+  width:  clamp(40px, 5.5vw, 62px);
+  height: clamp(40px, 5.5vw, 62px);
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #555 0%, #1a1a1a 100%);
   border: 2px solid #555;
-  font-size: 32px;
+  font-size: clamp(18px, 2.8vw, 34px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,32 +204,10 @@
   cursor: default;
 }
 
-/* Состояние spin-кнопки при вращении (перекрывает обычный фон) */
 .spin-button--spinning {
   background: rgba(30,30,30,0.8);
 }
 
-/* Маленькая кнопка авто/стрелка */
-.auto-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.45);
-  border: 1px solid #9F9F9F;
-  font-size: 28px ;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-}
-
-.auto-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-/* Кнопка SPIN в режиме быстрой скорости */
 .spin-button--fast {
   background: radial-gradient(circle at 40% 35%, #f39c12 0%, #8a5a00 100%) !important;
   border-color: #f39c12 !important;
@@ -226,14 +223,33 @@
 }
 
 .speed-label {
-  font-size: 9px;
+  font-size: clamp(6px, 0.9vw, 10px);
   font-weight: 900;
   color: #fff;
 }
 
-/* Авто кнопка */
+/* AUTO кнопка */
 .auto-spin-wrapper {
   position: relative;
+}
+
+.auto-button {
+  width:  clamp(28px, 3.8vw, 44px);
+  height: clamp(28px, 3.8vw, 44px);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid #9F9F9F;
+  font-size: clamp(16px, 2.2vw, 30px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auto-button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .auto-button--active {
@@ -251,12 +267,12 @@
 }
 
 .auto-stop-count {
-  font-size: 9px;
+  font-size: clamp(6px, 0.9vw, 10px);
   font-weight: 900;
   color: currentColor;
 }
 
-/* Выпадающее меню */
+/* ─── Выпадающее меню авто-спина ──────────────────────────────── */
 .auto-spin-menu {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -265,7 +281,7 @@
   border: 1px solid #333;
   border-radius: 10px;
   padding: 4px 0;
-  min-width: 130px;
+  min-width: clamp(110px, 14vw, 140px);
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.8);
   z-index: 1000;
   animation: menuAppear 0.15s ease;
@@ -278,21 +294,21 @@
 
 .auto-spin-menu__title {
   color: #FACB32;
-  font-size: 10px;
+  font-size: clamp(8px, 1vw, 11px);
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
-  padding: 6px 14px 8px;
+  padding: clamp(4px, 0.6vw, 7px) 14px clamp(5px, 0.8vw, 9px);
   border-bottom: 1px solid #2a2a2a;
 }
 
 .auto-spin-menu__item {
   width: 100%;
-  padding: 10px 14px;
+  padding: clamp(7px, 1vw, 11px) 14px;
   background: transparent;
   border: none;
   color: #fff;
-  font-size: 14px;
+  font-size: clamp(11px, 1.4vw, 15px);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -307,18 +323,47 @@
   color: #FACB32;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   TABLET ≤ 768px
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .center-group {
+    gap: clamp(6px, 2.5vw, 20px);
+    padding: 0 clamp(6px, 2vw, 20px);
+  }
+}
 
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE ≤ 600px — скрываем info button и WIN блок
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .info-button {
+    display: none;
+  }
 
+  .win-block {
+    display: none;
+  }
 
+  .center-group {
+    padding: 0 clamp(4px, 2vw, 12px);
+    gap: clamp(8px, 4vw, 20px);
+  }
 
+  .bottom-control-bar {
+    padding: 0 clamp(6px, 3vw, 16px);
+  }
+}
 
+/* ═══════════════════════════════════════════════════════════════
+   ОЧЕНЬ МАЛЕНЬКИЙ ≤ 400px — скрываем icon-stack
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 400px) {
+  .icon-stack {
+    display: none;
+  }
 
-
-
-
-
-
-
-
-
-
+  .bet-value {
+    min-width: 40px;
+  }
+}
