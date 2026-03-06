@@ -8,12 +8,12 @@ interface OrdersDisplayProps {
   onReadyToShow?: (triggerFn: () => Promise<void>) => void;
 }
 
-const ICON_SIZE = 60;
+const ICON_SIZE = 36;
 
 function SymbolIcon({ symbolId }: { symbolId: string }) {
   const frame = SHEET_FRAMES[symbolId];
   if (!frame) {
-    return <div style={{ width: ICON_SIZE, height: ICON_SIZE, background: '#eee', borderRadius: 8 }} />;
+    return <div style={{ width: ICON_SIZE, height: ICON_SIZE, background: '#ccc', borderRadius: 4 }} />;
   }
 
   const scale = Math.min(ICON_SIZE / frame.w, ICON_SIZE / frame.h);
@@ -52,7 +52,6 @@ function SymbolIcon({ symbolId }: { symbolId: string }) {
 
 export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayProps) {
   const [isFlashing, setIsFlashing] = useState(false);
-  const [animatedNewIds, setAnimatedNewIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const triggerFn = (): Promise<void> => {
@@ -70,79 +69,55 @@ export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayPr
     onReadyToShow?.(triggerFn);
   }, [onReadyToShow]);
 
-  // Отслеживаем новые ордера и анимируем их появление
-  useEffect(() => {
-    const newOrders = orders.filter(o => o.isNew);
-    if (newOrders.length > 0) {
-      // Создаём уникальные ключи для новых ордеров
-      const newKeys = new Set(
-        newOrders.map((o, i) => `${o.symbolId}-${o.quantity}-${i}`)
-      );
-      setAnimatedNewIds(newKeys);
-      // Убираем класс через 800ms (после анимации)
-      const t = setTimeout(() => setAnimatedNewIds(new Set()), 800);
-      return () => clearTimeout(t);
-    }
-  }, [orders]);
-
   if (orders.length === 0) {
     return null;
   }
 
   return (
     <div className={`orders-display${isFlashing ? ' orders-display--flash' : ''}`}>
-      <div className="orders-display__title">ACTIVE ORDERS</div>
+      <div className="orders-display__title">Active Orders</div>
 
-      {orders.map((order, index) => {
-        const progress = (order.collected / order.quantity) * 100;
-        const isCompleted = order.completed;
-        const isNew = order.isNew === true;
+      <div className="orders-grid">
+        {orders.map((order, index) => {
+          const progress = Math.min((order.collected / order.quantity) * 100, 100);
+          const isCompleted = order.completed;
+          const isNew = order.isNew === true;
 
-        return (
-          <div
-            key={`${order.symbolId}-${order.quantity}-${index}`}
-            className={`order-card ${isCompleted ? 'order-card--completed' : ''} ${isNew ? 'order-card--new' : ''}`}
-            style={{ transform: `rotate(${index % 2 === 0 ? -1 : 1}deg)` }}
-          >
-            {isNew && (
-              <div className="order-card__new-badge">NEW ORDER!</div>
-            )}
+          return (
+            <div
+              key={`${order.symbolId}-${order.quantity}-${index}`}
+              className={`order-card${isCompleted ? ' order-card--completed' : ''}${isNew ? ' order-card--new' : ''}`}
+            >
+              {isNew && <div className="order-card__new-badge">NEW!</div>}
+              {isCompleted && <div className="order-card__done">✓</div>}
 
-            <div className="order-card__header">
-              <div className="order-card__icon">
+              {/* Symbol icon */}
+              <div className="order-card__icon-wrap">
                 <SymbolIcon symbolId={order.symbolId} />
               </div>
-              <div className="order-card__meta">
-                <div className="order-card__label">ORDER #{index + 1}</div>
-              </div>
-              <div className="order-card__right">
-                <div className="order-card__label">TIP</div>
-                <div className="order-card__tip-value">{order.tipMultiplier}x</div>
-              </div>
-            </div>
 
-            <div className="order-card__progress-section">
-              <div className="order-card__progress-row">
-                <span>PROGRESS</span>
-                <span>{order.collected} / {order.quantity}</span>
+              {/* Big quantity number */}
+              <div className="order-card__quantity">{order.quantity}x</div>
+
+              {/* Progress like "8/15" */}
+              <div className="order-card__progress-text">
+                {order.collected}/{order.quantity}
               </div>
-              <div className="order-card__progress-bar-container">
+
+              {/* Thin bar */}
+              <div className="order-card__bar">
                 <div
-                  className={`order-card__progress-fill ${isCompleted ? 'order-card__progress-fill--completed' : ''}`}
+                  className={`order-card__bar-fill${isCompleted ? ' order-card__bar-fill--completed' : ''}`}
                   style={{ width: `${progress}%` }}
                 />
-                <div className="order-card__progress-text">{Math.round(progress)}%</div>
               </div>
-            </div>
 
-            {isCompleted && (
-              <div className="order-card__badge-container">
-                <div className="order-card__badge">✓ COMPLETED</div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+              {/* Tip */}
+              <div className="order-card__tip">{order.tipMultiplier}x tip</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
