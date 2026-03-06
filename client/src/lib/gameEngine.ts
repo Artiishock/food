@@ -48,6 +48,14 @@ export interface CascadeStep {
 
 export type BonusType = 'none' | 'order' | 'standard' | 'big';
 
+export interface FreeSpinsSummary {
+  totalWin: number;
+  completedOrdersCount: number;
+  // BIG: сколько раз заказы были выполнены (включая повторные на заменённых слотах)
+  totalOrdersCompleted: number;
+  packageType: 'standard' | 'big';
+}
+
 export interface GameState {
   grid: GridCell[][];
   pendingGrid: GridCell[][] | null;
@@ -65,9 +73,15 @@ export interface GameState {
   lastScatterCount: number;
   lastBonusType: BonusType;
   triggeredPackageType: 'standard' | 'big' | null;
-  // Track total orders completed during this free spins session
-  freeSpinsTotalCompletedTips: number;
+  freeSpinsTotalWin: number;           // накопленный выигрыш за весь FS-сеанс
+  freeSpinsTotalOrdersCompleted: number; // сколько раз выполнены заказы за FS
+  freeSpinsPackageType: 'standard' | 'big' | null;
+  // Заполняется когда FS заканчивается — показываем итоговый экран
+  freeSpinsSummary: FreeSpinsSummary | null;
 }
+
+const FS_TIP_MULTIPLIERS_STANDARD = [5, 8, 10, 15, 20, 25];
+const FS_TIP_MULTIPLIERS_BIG      = [8, 12, 15, 25, 35, 50, 75];
 
 export class GameEngine {
   private state: GameState;
@@ -75,14 +89,12 @@ export class GameEngine {
   private foodSymbols: Symbol[];
   private foodTotalWeight: number;
   private allSymbols: Symbol[];
-  private allTotalWeight: number;
 
   constructor() {
     this.symbols = symbolsConfig.symbols as Symbol[];
     this.foodSymbols = this.symbols.filter(s => !s.isScatter);
     this.foodTotalWeight = this.foodSymbols.reduce((sum, s) => sum + s.weight, 0);
     this.allSymbols = this.symbols;
-    this.allTotalWeight = this.allSymbols.reduce((sum, s) => sum + s.weight, 0);
     this.state = this.initializeState();
   }
 
@@ -104,7 +116,10 @@ export class GameEngine {
       lastScatterCount: 0,
       lastBonusType: 'none',
       triggeredPackageType: null,
-      freeSpinsTotalCompletedTips: 0,
+      freeSpinsTotalWin: 0,
+      freeSpinsTotalOrdersCompleted: 0,
+      freeSpinsPackageType: null,
+      freeSpinsSummary: null,
     };
   }
 
@@ -114,7 +129,6 @@ export class GameEngine {
     const TOTAL = ROWS * COLS;
 
     const scatterCount = this.rollScatterCount();
-
     const positions = new Set<number>();
     while (positions.size < scatterCount) {
       positions.add(Math.floor(Math.random() * TOTAL));
@@ -157,14 +171,22 @@ export class GameEngine {
   private getRandomFoodSymbol(): Symbol {
     const roll = Math.random() * this.foodTotalWeight;
     let accumulated = 0;
-    for (let i = 0; i < this.foodSymbols.length; i++) {
-      accumulated += this.foodSymbols[i].weight;
-      if (roll < accumulated) return { ...this.foodSymbols[i] };
+    for (const sym of this.foodSymbols) {
+      accumulated += sym.weight;
+      if (roll < accumulated) return { ...sym };
     }
     return { ...this.foodSymbols[this.foodSymbols.length - 1] };
   }
 
-  private getRandomTipMultiplier(): number {
+  private getRandomTipMultiplier(pkg?: 'standard' | 'big' | null): number {
+    if (pkg === 'big') {
+      const arr = FS_TIP_MULTIPLIERS_BIG;
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+    if (pkg === 'standard') {
+      const arr = FS_TIP_MULTIPLIERS_STANDARD;
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
     const multipliers = [2, 3, 4, 5, 6, 7, 8, 9, 10];
     return multipliers[Math.floor(Math.random() * multipliers.length)];
   }
@@ -185,17 +207,13 @@ export class GameEngine {
 
   public prepare(): Order[] {
     if (this.state.isSpinning) return [];
-
-    if (!this.state.isFreeSpins) {
-      this.state.orders = [];
-    }
+    if (!this.state.isFreeSpins) this.state.orders = [];
 
     const grid = this.generateInitialGrid();
     this.state.pendingGrid = grid;
 
     const pendingOrders = this.computeOrdersFromGrid(grid);
     this.state.pendingOrders = pendingOrders;
-
     this.state.preparedOrders = pendingOrders.map(o => ({ ...o }));
 
     return pendingOrders;
@@ -208,7 +226,6 @@ export class GameEngine {
         if (cell?.symbol?.isScatter) scatterCount++;
       }
     }
-
     this.state.lastScatterCount = scatterCount;
 
     if (this.state.isFreeSpins) return this.state.orders;
@@ -228,39 +245,32 @@ export class GameEngine {
     return [];
   }
 
-  private buildOrders(count: number): Order[] {
+  private buildOrders(count: number, pkg?: 'standard' | 'big' | null): Order[] {
     const orders: Order[] = [];
     for (let i = 0; i < count; i++) {
-      const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
-      const quantity = Math.floor(Math.random() * 11) + 10;
-      const tipMultiplier = this.getRandomTipMultiplier();
-      orders.push({ symbolId: symbol.id, quantity, collected: 0, tipMultiplier, completed: false });
+      orders.push(this.buildSingleOrder(pkg));
     }
     return orders;
   }
 
-  private buildSingleOrder(): Order {
+  private buildSingleOrder(pkg?: 'standard' | 'big' | null): Order {
     const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
     const quantity = Math.floor(Math.random() * 11) + 10;
-    const tipMultiplier = this.getRandomTipMultiplier();
+    const tipMultiplier = this.getRandomTipMultiplier(pkg);
     return { symbolId: symbol.id, quantity, collected: 0, tipMultiplier, completed: false };
   }
 
   public async spin(): Promise<{ wins: WinInfo[], cascades: number, totalWin: number }> {
-    if (this.state.isSpinning) {
-      return { wins: [], cascades: 0, totalWin: 0 };
-    }
+    if (this.state.isSpinning) return { wins: [], cascades: 0, totalWin: 0 };
+
+    // Сбрасываем summary предыдущего сеанса
+    this.state.freeSpinsSummary = null;
 
     let betAmount = this.state.currentBet;
-    if (this.state.anteMode === 'low') {
-      betAmount *= gameConfig.anteMode.lowAnteMultiplier;
-    } else if (this.state.anteMode === 'high') {
-      betAmount *= gameConfig.anteMode.highAnteMultiplier;
-    }
+    if (this.state.anteMode === 'low') betAmount *= gameConfig.anteMode.lowAnteMultiplier;
+    else if (this.state.anteMode === 'high') betAmount *= gameConfig.anteMode.highAnteMultiplier;
 
-    if (this.state.balance < betAmount) {
-      throw new Error('Insufficient balance');
-    }
+    if (this.state.balance < betAmount) throw new Error('Insufficient balance');
 
     this.state.balance -= betAmount;
     this.state.isSpinning = true;
@@ -294,14 +304,43 @@ export class GameEngine {
 
     if (this.state.isFreeSpins && this.state.freeSpinsRemaining > 0) {
       this.state.freeSpinsRemaining--;
+
       if (this.state.freeSpinsRemaining === 0) {
-        this.state.isFreeSpins = false;
-        this.checkAllOrdersCompletion();
-        this.state.freeSpinsTotalCompletedTips = 0;
+        // FS закончились — формируем summary и сбрасываем сеанс
+        this.finishFreeSpins();
       }
     }
 
     return result;
+  }
+
+  private finishFreeSpins(): void {
+    // Начисляем супербонус если все заказы выполнены (только STANDARD — BIG заменяет заказы)
+    let superBonus = 0;
+    if (this.state.freeSpinsPackageType === 'standard') {
+      const allCompleted = this.state.orders.length > 0 &&
+                           this.state.orders.every(o => o.completed);
+      if (allCompleted) {
+        superBonus = this.state.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier;
+        this.state.balance += superBonus;
+        this.state.totalWin += superBonus;
+        this.state.freeSpinsTotalWin += superBonus;
+      }
+    }
+
+    this.state.freeSpinsSummary = {
+      totalWin: this.state.freeSpinsTotalWin,
+      completedOrdersCount: this.state.orders.filter(o => o.completed).length,
+      totalOrdersCompleted: this.state.freeSpinsTotalOrdersCompleted,
+      packageType: this.state.freeSpinsPackageType ?? 'standard',
+    };
+
+    // Сброс FS-состояния
+    this.state.isFreeSpins = false;
+    this.state.freeSpinsTotalWin = 0;
+    this.state.freeSpinsTotalOrdersCompleted = 0;
+    this.state.freeSpinsPackageType = null;
+    this.state.orders = [];
   }
 
   private async processCascades(): Promise<{ wins: WinInfo[], cascades: number, totalWin: number }> {
@@ -318,15 +357,9 @@ export class GameEngine {
       const gridAfterDrop = this.cloneGrid(this.state.grid);
       this.fillEmptySpaces();
       const gridAfterFill = this.cloneGrid(this.state.grid);
-
       this.state.cascadeSteps.push({
-        wins: [],
-        isScatterStep: true,
-        scatterCells,
-        gridBeforeRemoval,
-        gridAfterRemoval,
-        gridAfterDrop,
-        gridAfterFill
+        wins: [], isScatterStep: true, scatterCells,
+        gridBeforeRemoval, gridAfterRemoval, gridAfterDrop, gridAfterFill
       });
     }
 
@@ -335,7 +368,6 @@ export class GameEngine {
       if (wins.length === 0) break;
 
       cascadeCount++;
-
       for (const win of wins) {
         const payout = this.calculatePayout(win.symbol, win.count);
         win.payout = payout * this.state.currentBet;
@@ -353,13 +385,8 @@ export class GameEngine {
       const gridAfterFill = this.cloneGrid(this.state.grid);
 
       this.state.cascadeSteps.push({
-        wins,
-        isScatterStep: false,
-        scatterCells: [],
-        gridBeforeRemoval,
-        gridAfterRemoval,
-        gridAfterDrop,
-        gridAfterFill
+        wins, isScatterStep: false, scatterCells: [],
+        gridBeforeRemoval, gridAfterRemoval, gridAfterDrop, gridAfterFill
       });
     }
 
@@ -368,9 +395,8 @@ export class GameEngine {
 
   private findScatterCells(grid: GridCell[][]): GridCell[] {
     const cells: GridCell[] = [];
-    for (let row = 0; row < grid.length; row++) {
-      for (let col = 0; col < grid[row].length; col++) {
-        const cell = grid[row][col];
+    for (const row of grid) {
+      for (const cell of row) {
         if (cell?.symbol?.isScatter) cells.push({ ...cell, symbol: { ...cell.symbol } });
       }
     }
@@ -387,74 +413,45 @@ export class GameEngine {
 
   private checkScatterAndOrders(): void {
     let scatterCount = 0;
-    for (let row = 0; row < this.state.grid.length; row++) {
-      for (let col = 0; col < this.state.grid[row].length; col++) {
-        const cell = this.state.grid[row][col];
+    for (const row of this.state.grid) {
+      for (const cell of row) {
         if (cell?.symbol?.isScatter) scatterCount++;
       }
     }
-
     this.state.lastScatterCount = scatterCount;
-
-    if (this.state.isFreeSpins) {
-      return;
-    }
+    if (this.state.isFreeSpins) return;
 
     if (scatterCount >= 5) {
-      // 5+ scatters → BIG FS Package (10 spins, 5-6 orders, no charge)
       this.state.lastBonusType = 'big';
       this.triggerBigBonus();
     } else if (scatterCount === 4) {
-      // 4 scatters → STANDARD FS Package (10 spins, 3 orders, no charge)
       this.state.lastBonusType = 'standard';
       this.triggerStandardBonus();
     } else if (scatterCount >= 1) {
       this.state.lastBonusType = 'order';
-      this.generateOrdersFromScatter(1);
+      this.state.orders = this.buildOrders(1);
     }
   }
 
-  private generateOrdersFromScatter(count: number): void {
-    this.state.orders = [];
-    for (let i = 0; i < count; i++) {
-      const symbol = this.foodSymbols[Math.floor(Math.random() * this.foodSymbols.length)];
-      const quantity = Math.floor(Math.random() * 11) + 10;
-      const tipMultiplier = this.getRandomTipMultiplier();
-
-      this.state.orders.push({
-        symbolId: symbol.id,
-        quantity,
-        collected: 0,
-        tipMultiplier,
-        completed: false
-      });
-    }
-  }
-
-  /**
-   * STANDARD FS Package — triggered by exactly 4 scatters.
-   * 10 free spins, 3 orders, NO balance deduction.
-   */
   private triggerStandardBonus(): void {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = 10;
-    this.state.freeSpinsTotalCompletedTips = 0;
+    this.state.freeSpinsTotalWin = 0;
+    this.state.freeSpinsTotalOrdersCompleted = 0;
     this.state.triggeredPackageType = 'standard';
-    this.generateOrdersFromScatter(3);
+    this.state.freeSpinsPackageType = 'standard';
+    this.state.orders = this.buildOrders(5, 'standard');
   }
 
-  /**
-   * BIG FS Package — triggered by 5+ scatters.
-   * 10 free spins, 5-6 orders, NO balance deduction.
-   */
   private triggerBigBonus(): void {
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = 10;
-    this.state.freeSpinsTotalCompletedTips = 0;
+    this.state.freeSpinsTotalWin = 0;
+    this.state.freeSpinsTotalOrdersCompleted = 0;
     this.state.triggeredPackageType = 'big';
-    // 5 or 6 orders for big bonus
+    this.state.freeSpinsPackageType = 'big';
     const orderCount = Math.random() < 0.5 ? 5 : 6;
-    this.generateOrdersFromScatter(orderCount);
+    this.state.orders = this.buildOrders(orderCount, 'big');
   }
 
   private findWinningCombinations(grid: GridCell[][]): WinInfo[] {
@@ -466,11 +463,9 @@ export class GameEngine {
       if (!grid[row]) continue;
       for (let col = 0; col < COLS; col++) {
         const cell = grid[row][col];
-        if (cell == null) continue;
-        if (!cell.symbol) continue;
+        if (!cell?.symbol || cell.symbol.isScatter) continue;
         const sid = cell.symbol.id;
-        if (typeof sid !== 'string' || sid === '') continue;
-        if (cell.symbol.isScatter) continue;
+        if (!sid) continue;
         if (!groups.has(sid)) groups.set(sid, []);
         groups.get(sid)!.push({ symbol: { ...cell.symbol }, row: cell.row, col: cell.col, id: cell.id });
       }
@@ -506,7 +501,7 @@ export class GameEngine {
   private removeWinningSymbols(wins: WinInfo[]): void {
     for (const win of wins) {
       for (const cell of win.cells) {
-        if (this.state.grid[cell.row] != null && this.state.grid[cell.row][cell.col] != null) {
+        if (this.state.grid[cell.row]?.[cell.col]) {
           (this.state.grid[cell.row][cell.col] as any) = null;
         }
       }
@@ -518,7 +513,7 @@ export class GameEngine {
       const survivors: GridCell[] = [];
       for (let row = symbolsConfig.gridSize.rows - 1; row >= 0; row--) {
         const cell = this.state.grid[row][col];
-        if (cell != null && cell.symbol) survivors.push(cell);
+        if (cell?.symbol) survivors.push(cell);
       }
       for (let row = 0; row < symbolsConfig.gridSize.rows; row++) {
         (this.state.grid[row][col] as any) = null;
@@ -536,12 +531,10 @@ export class GameEngine {
   private fillEmptySpaces(): void {
     for (let row = 0; row < symbolsConfig.gridSize.rows; row++) {
       for (let col = 0; col < symbolsConfig.gridSize.columns; col++) {
-        const cell = this.state.grid[row][col];
-        if (cell == null || !cell.symbol) {
+        if (!this.state.grid[row][col]?.symbol) {
           this.state.grid[row][col] = {
             symbol: this.getRandomFoodSymbol(),
-            row,
-            col,
+            row, col,
             id: `cell-${row}-${col}-${Date.now()}-${Math.random().toString(36).slice(2)}`
           };
         }
@@ -551,60 +544,37 @@ export class GameEngine {
 
   private cloneGrid(grid: GridCell[][]): GridCell[][] {
     return grid.map(row =>
-      row.map(cell => {
-        if (cell == null) return null as any;
-        return { ...cell, symbol: { ...cell.symbol } };
-      })
+      row.map(cell => cell == null ? null as any : { ...cell, symbol: { ...cell.symbol } })
     );
   }
 
   private checkOrderCompletion(): void {
-    if (this.state.isFreeSpins) {
-      // During free spins: completed orders award tips AND are replaced with new orders
-      const completedIndices: number[] = [];
-      for (let i = 0; i < this.state.orders.length; i++) {
-        const order = this.state.orders[i];
-        if (order.collected >= order.quantity && !order.completed) {
-          order.completed = true;
-          const tip = this.state.currentBet * order.tipMultiplier;
-          this.state.balance += tip;
-          this.state.totalWin += tip;
-          this.state.freeSpinsTotalCompletedTips += tip;
-          completedIndices.push(i);
-        }
-      }
-      // Replace completed orders with new ones
-      for (const idx of completedIndices) {
-        const newOrder = this.buildSingleOrder();
-        newOrder.isNew = true;
-        this.state.orders[idx] = newOrder;
-      }
-    } else {
-      for (const order of this.state.orders) {
-        if (order.collected >= order.quantity && !order.completed) {
-          order.completed = true;
-          const tip = this.state.currentBet * order.tipMultiplier;
-          this.state.balance += tip;
-          this.state.totalWin += tip;
+    const pkg = this.state.freeSpinsPackageType;
+
+    for (let i = 0; i < this.state.orders.length; i++) {
+      const order = this.state.orders[i];
+      if (order.collected >= order.quantity && !order.completed) {
+        order.completed = true;
+        const tip = this.state.currentBet * order.tipMultiplier;
+        this.state.balance += tip;
+        this.state.totalWin += tip;
+
+        if (this.state.isFreeSpins) {
+          this.state.freeSpinsTotalWin += tip;
+          this.state.freeSpinsTotalOrdersCompleted++;
+
+          if (pkg === 'big') {
+            // BIG: заменяем выполненный заказ новым (конвейер продолжается)
+            const newOrder = this.buildSingleOrder('big');
+            newOrder.isNew = true;
+            this.state.orders[i] = newOrder;
+          }
+          // STANDARD: оставляем заказ как completed, ничего не заменяем
         }
       }
     }
   }
 
-  private checkAllOrdersCompletion(): void {
-    const allCompleted = this.state.orders.every(order => order.completed);
-    if (allCompleted && this.state.orders.length > 0) {
-      const superBonus = this.state.currentBet * gameConfig.orders.freeSpinsMode.superBonusMultiplier;
-      this.state.balance += superBonus;
-      this.state.totalWin += superBonus;
-    }
-    this.state.orders = [];
-  }
-
-  /**
-   * Manual purchase of free spins — deducts balance.
-   * Sets triggeredPackageType for showing FreeSpinsIntro overlay.
-   */
   public buyFreeSpins(packageType: 'cheap' | 'standard'): void {
     const pkg = packageType === 'cheap'
       ? gameConfig.freeSpins.cheapPackage
@@ -617,10 +587,18 @@ export class GameEngine {
     this.state.balance -= pkg.cost * this.state.currentBet;
     this.state.isFreeSpins = true;
     this.state.freeSpinsRemaining = pkg.spins;
-    this.state.freeSpinsTotalCompletedTips = 0;
-    this.state.triggeredPackageType = packageType === 'cheap' ? 'standard' : 'big';
+    this.state.freeSpinsTotalWin = 0;
+    this.state.freeSpinsTotalOrdersCompleted = 0;
+    this.state.freeSpinsSummary = null;
 
-    const orderCount = Math.min(pkg.maxOrders, 5);
-    this.generateOrdersFromScatter(orderCount);
+    if (packageType === 'cheap') {
+      this.state.triggeredPackageType = 'standard';
+      this.state.freeSpinsPackageType = 'standard';
+      this.state.orders = this.buildOrders(5, 'standard');
+    } else {
+      this.state.triggeredPackageType = 'big';
+      this.state.freeSpinsPackageType = 'big';
+      this.state.orders = this.buildOrders(5, 'big');
+    }
   }
 }

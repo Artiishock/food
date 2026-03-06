@@ -11,7 +11,8 @@ interface GameCanvasProps {
   soundEnabled?: boolean;
   onSpinComplete?: (result: any) => void;
   onSpeedUpReady?: (speedUp: () => void) => void;
-  onOrdersAppear?: () => Promise<void>;   // Promise: каскады стартуют только после resolve
+  onOrdersAppear?: () => Promise<void>;
+  initialFast?: boolean;
 }
 
 const CANVAS_W = 800;
@@ -22,10 +23,17 @@ const CW       = CANVAS_W / COLS;
 const CH       = CANVAS_H / ROWS;
 const BUFFER   = 4;
 
-const SPIN_SPEED   = 28;
-const DECEL        = 0.55;
-const STOP_DELAY   = 160;
-const SPIN_BASE_MS = 1800;
+// Скорость вращения px/frame при 60fps
+const SPIN_SPEED        = 28;
+// Фреймов на разгон и торможение
+const ACCEL_FRAMES      = 18;
+const DECEL_FRAMES      = 38;
+// Задержка между остановками соседних барабанов (~417ms между каждым).
+// Шаг = 7 * CH = 700px — кратен CH, слоты всегда встают ровно.
+const STOP_DELAY_FRAMES = 25; // 25 * 28 = 700 = 7 * CH(100)
+// Минимум полных оборотов до остановки первого барабана
+const MIN_SPINS         = 2;
+
 const GRAVITY = 1.3;
 const BOUNCE  = 0.28;
 
@@ -45,7 +53,7 @@ interface Reel {
   spinning:  boolean;
 }
 
-export default function GameCanvas({ gameEngine, isSpinning = false, soundEnabled = true, onSpinComplete, onSpeedUpReady, onOrdersAppear }: GameCanvasProps) {
+export default function GameCanvas({ gameEngine, isSpinning = false, soundEnabled = true, onSpinComplete, onSpeedUpReady, onOrdersAppear, initialFast = false }: GameCanvasProps) {
   const mountRef      = useRef<HTMLDivElement>(null);
   const appRef        = useRef<PIXI.Application | null>(null);
   const reelsRef      = useRef<Reel[]>([]);
@@ -57,6 +65,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
   const { play, setMuted } = useGameSounds();
   const stopSpin      = useRef<(() => void) | null>(null);
   const speedMultRef  = useRef(1);
+  const initialFastRef = useRef(initialFast);
   const [ready, setReady] = useState(false);
   const [err,   setErr  ] = useState<string | null>(null);
 
@@ -64,9 +73,9 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
     setMuted(!soundEnabled);
   }, [soundEnabled]);
 
-  // Держим ref актуальным при каждом рендере — избегаем stale closure в async runSpinSequence
   onSpinCompleteRef.current  = onSpinComplete;
   onOrdersAppearRef.current  = onOrdersAppear;
+  initialFastRef.current     = initialFast;
 
   const speedUp = useCallback(() => {
     if (!busyRef.current) return;
@@ -204,7 +213,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
   const runSpinSequence = async (initialGrid: GridCell[][], cascadeSteps: any[]) => {
     busyRef.current = true;
-    speedMultRef.current = 1;
+    speedMultRef.current = initialFastRef.current ? 4 : 1;
     stopSpin.current = play('spin') ?? null;
     try {
       await animateReels(initialGrid);
@@ -219,86 +228,99 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
   const animateReels = (finalGrid: GridCell[][]): Promise<void> => {
     return new Promise(resolve => {
-      const app = appRef.current!;
+      const app        = appRef.current!;
       const SLOT_COUNT = ROWS + BUFFER * 2;
       const TOTAL_H    = SLOT_COUNT * CH;
 
+      // ── 1. Расставляем слоты ─────────────────────────────────────────────
+      // Стартовая позиция: (i - BUFFER) * CH — слоты стоят на своих обычных
+      // местах, canonical-слоты сразу видны на экране (нет мигания пустоты).
+      // Canonical-слоты получают финальные символы ДО старта — они прокручиваются
+      // вместе со всеми и "приплывают" обратно на место после MIN_SPINS оборотов.
       for (let col = 0; col < COLS; col++) {
         const reel = reelsRef.current[col];
         reel.container.y = 0;
-
         for (let i = 0; i < SLOT_COUNT; i++) {
           const isCanonical = i >= BUFFER && i < BUFFER + ROWS;
-          if (isCanonical) {
-            const row = i - BUFFER;
-            const sym = finalGrid[row]?.[col]?.symbol?.id ?? randomFood();
-            setSlotSymbol(reel.slots[i], sym);
-          } else {
-            setSlotSymbol(reel.slots[i], randomFood());
-          }
-          reel.slots[i].container.y = (i - BUFFER) * CH - ROWS * CH;
+          const sym = isCanonical
+            ? (finalGrid[i - BUFFER]?.[col]?.symbol?.id ?? randomFood())
+            : randomFood();
+          setSlotSymbol(reel.slots[i], sym);
+          reel.slots[i].container.y = (i - BUFFER) * CH;
           resetSlotAppearance(reel.slots[i]);
         }
       }
 
-      const vel        = new Array(COLS).fill(SPIN_SPEED);
-      const scrolled   = new Array(COLS).fill(0);
-      const snapTarget = new Array(COLS).fill(-1);
-      const stopped    = new Array(COLS).fill(false);
-      let elapsed      = 0;
+      // ── 2. Считаем детерминированный путь каждого барабана ───────────────
+      // Старт canonical[0] (slot[BUFFER]) на y=0.
+      // После прокрутки на точное кратное TOTAL_H → снова y=0. ✓
+      // target[col] = MIN_SPINS * TOTAL_H + задержка для порядка остановки.
+      // Каждый следующий барабан проходит больше → останавливается позже →
+      // гарантированный порядок 0→1→2→3→4→5.
+      const d_accel = SPIN_SPEED * ACCEL_FRAMES / 2;
+      const d_decel = SPIN_SPEED * DECEL_FRAMES / 2;
+
+      const snapForCol = (col: number): number => {
+        let target = MIN_SPINS * TOTAL_H + col * STOP_DELAY_FRAMES * SPIN_SPEED;
+        const minTarget = d_accel + d_decel + SPIN_SPEED * 15;
+        while (target < minTarget) target += TOTAL_H;
+        // Округляем вверх до кратного CH — слоты встанут ровно на row*CH.
+        // target = (MIN_SPINS + 1 + col) * TOTAL_H
+        // Каждый барабан проходит на TOTAL_H больше предыдущего → уникальные targets.
+        // Кратность TOTAL_H гарантирует что canonical-слоты вернутся ровно на row*CH.
+        // Разница ~774ms между барабанами.
+        return (MIN_SPINS + 1 + col) * TOTAL_H;
+      };
+
+      const targets      = Array.from({ length: COLS }, (_, c) => snapForCol(c));
+      const scrolled     = new Array(COLS).fill(0);
+      const stopped      = new Array(COLS).fill(false);
+      const decelStarted = new Array(COLS).fill(false);
+      const vel          = new Array(COLS).fill(0);
+      let   frame        = 0;
+
+      const decelStartFrame = targets.map(t => {
+        const cruiseFrames = (t - d_accel - d_decel) / SPIN_SPEED;
+        return Math.ceil(ACCEL_FRAMES + cruiseFrames);
+      });
 
       const tick = (ticker: PIXI.Ticker) => {
         const spd = speedMultRef.current;
-        elapsed += ticker.elapsedMS * spd;
+        const df  = ticker.elapsedMS / (1000 / 60) * spd;
+        frame += df;
+
         let allStopped = true;
 
         for (let col = 0; col < COLS; col++) {
           if (stopped[col]) continue;
           allStopped = false;
 
-          const stopAt = SPIN_BASE_MS + col * STOP_DELAY;
-          const reel   = reelsRef.current[col];
+          const reel      = reelsRef.current[col];
+          const remaining = targets[col] - scrolled[col];
 
-          if (elapsed >= stopAt) {
-            vel[col] = Math.max(0, vel[col] - DECEL * spd);
-
-            if (snapTarget[col] < 0) {
-              const cur = scrolled[col];
-              const mod = ROWS * CH;
-              const curMod = cur % TOTAL_H;
-              let dist = mod - curMod;
-              if (dist <= 0) dist += TOTAL_H;
-              snapTarget[col] = cur + dist;
+          // Фаза РАЗГОН
+          if (!decelStarted[col] && frame < ACCEL_FRAMES) {
+            vel[col] = SPIN_SPEED * Math.min(frame / ACCEL_FRAMES, 1);
+          }
+          // Фаза КРЕЙСЕР
+          else if (!decelStarted[col] && frame < decelStartFrame[col]) {
+            vel[col] = SPIN_SPEED;
+          }
+          // Старт ТОРМОЖЕНИЯ — только после того как предыдущий начал тормозить
+          else if (!decelStarted[col]) {
+            if (col === 0 || decelStarted[col - 1]) {
+              decelStarted[col] = true;
+            } else {
+              vel[col] = SPIN_SPEED;
             }
           }
 
-          const v         = vel[col];
-          const remaining = snapTarget[col] >= 0 ? snapTarget[col] - scrolled[col] : Infinity;
-          const atTarget  = snapTarget[col] >= 0 && remaining <= 0;
-
-          if (atTarget) {
-            for (let i = 0; i < SLOT_COUNT; i++) {
-              const isCanonical = i >= BUFFER && i < BUFFER + ROWS;
-              const row = i - BUFFER;
-              reel.slots[i].container.y = isCanonical ? row * CH : (i - BUFFER - ROWS) * CH;
-              reel.slots[i].container.visible = isCanonical;
-              if (isCanonical) {
-                reel.slots[i].container.alpha = 1;
-                reel.slots[i].container.scale.set(1);
-                reel.slots[i].container.rotation = 0;
-                reel.slots[i].bg.clear();
-                reel.slots[i].bg.roundRect(2, 2, CW - 4, CH - 4, 6).fill(0x2a2a3e).stroke({ width: 1.5, color: 0x444466 });
-              }
-            }
-            play('reelStop', { col });
-            stopped[col] = true;
-            continue;
+          // Фаза ТОРМОЖЕНИЕ
+          if (decelStarted[col]) {
+            vel[col] = Math.max(1.0, SPIN_SPEED * (remaining / d_decel));
           }
 
-          const SNAP_MIN = SPIN_SPEED * 0.35 * spd;
-          const effectiveV = (snapTarget[col] >= 0 && v < SNAP_MIN) ? SNAP_MIN : v;
-          const step = Math.min(effectiveV, remaining < Infinity ? remaining : effectiveV);
-
+          const step = Math.min(vel[col] * df, Math.max(0, remaining));
           scrolled[col] += step;
 
           for (let i = 0; i < SLOT_COUNT; i++) {
@@ -312,6 +334,27 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
                 resetSlotAppearance(reel.slots[i]);
               }
             }
+          }
+
+          // Барабан достиг цели — target кратен TOTAL_H, поэтому canonical-слоты
+          // вернулись точно на row*CH без прыжков. Просто фиксируем видимость.
+          if (scrolled[col] >= targets[col]) {
+            for (let i = 0; i < SLOT_COUNT; i++) {
+              const isCanonical = i >= BUFFER && i < BUFFER + ROWS;
+              const row = i - BUFFER;
+              reel.slots[i].container.y      = isCanonical ? row * CH : (row - ROWS) * CH;
+              reel.slots[i].container.visible = isCanonical;
+              if (isCanonical) {
+                reel.slots[i].container.alpha    = 1;
+                reel.slots[i].container.scale.set(1);
+                reel.slots[i].container.rotation = 0;
+                reel.slots[i].bg.clear();
+                reel.slots[i].bg.roundRect(2, 2, CW - 4, CH - 4, 6)
+                  .fill(0x2a2a3e).stroke({ width: 1.5, color: 0x444466 });
+              }
+            }
+            play('reelStop', { col });
+            stopped[col] = true;
           }
         }
 
@@ -412,7 +455,7 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
       const tick = (ticker: PIXI.Ticker) => {
         const spd = speedMultRef.current;
-        const dt  = ticker.elapsedMS;       // реальное время кадра в мс
+        const dt  = ticker.elapsedMS;
 
         items.forEach(item => {
           if (item.done) return;
@@ -459,7 +502,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
         if (items.every(i => i.done)) {
           app.ticker.remove(tick);
-          // Ждём пока UI покажет ордер — но не дольше 1.5с (защита от зависания)
           const uiPromise = onOrdersAppearRef.current ? onOrdersAppearRef.current() : Promise.resolve();
           const timeout   = new Promise<void>(r => setTimeout(r, 1500));
           Promise.race([uiPromise, timeout]).then(() => {
@@ -475,7 +517,6 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
     new Promise(resolve => {
       const app = appRef.current!;
       const fx  = fxLayerRef.current!;
-      const spd = speedMultRef.current;
 
       const TARGET_X = CANVAS_W / 2;
       const TARGET_Y = CANVAS_H + 40;
@@ -602,11 +643,33 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
         const reel = reelsRef.current[col]; if (!reel) continue;
         reel.container.y = 0;
 
+        // Строим список удалённых строк в этой колонке
         const removedRows = new Set<number>();
         removedPositions.forEach(pos => {
           const [r, c] = pos.split('-').map(Number);
           if (c === col) removedRows.add(r);
         });
+
+        if (removedRows.size === 0) continue;
+
+        // Строим карту: finalRow → откуда пришёл символ (beforeRow или 'new')
+        // Логика: символы падают вниз. Выжившие символы из beforeGrid
+        // сохраняют своё положение относительно дна — т.е. самый нижний
+        // выживший остаётся на самой нижней незанятой позиции и т.д.
+        //
+        // beforeGrid колонка сверху вниз: собираем выживших (не удалённых)
+        const survivors: { beforeRow: number; symbolId: string }[] = [];
+        for (let r = 0; r < ROWS; r++) {
+          if (!removedRows.has(r)) {
+            survivors.push({ beforeRow: r, symbolId: beforeGrid[r]?.[col]?.symbol?.id ?? randomFood() });
+          }
+        }
+        // survivors упорядочены сверху вниз из beforeGrid.
+        // В finalGrid они должны занять НИЖНИЕ позиции (тяжесть тянет вниз).
+        // Новые символы заполняют верхние позиции.
+        const newCount = removedRows.size;
+        // finalRow 0..newCount-1 — новые символы (падают сверху)
+        // finalRow newCount..ROWS-1 — выжившие (остаются на месте или падают на новую позицию)
 
         for (let row = 0; row < ROWS; row++) {
           const slot = reel.slots[row + BUFFER];
@@ -615,42 +678,43 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
 
           const targetY = row * CH;
 
-          let removedAboveOrAt = 0;
-          for (let r = 0; r <= row; r++) {
-            if (removedRows.has(r)) removedAboveOrAt++;
-          }
-
-          const sourceRow = row - removedAboveOrAt;
-          const isNew = sourceRow < 0;
-
           setSlotSymbol(slot, cell.symbol.id);
           slot.container.visible = true;
-          slot.container.alpha = 1;
+          slot.container.alpha   = 1;
           slot.container.scale.set(1);
           slot.container.rotation = 0;
           slot.bg.clear();
           slot.bg.roundRect(2, 2, CW - 4, CH - 4, 6).fill(0x2a2a3e).stroke({ width: 1.5, color: 0x444466 });
 
-          let startY: number;
-          if (isNew) {
-            startY = targetY - (Math.abs(sourceRow) + 1) * CH;
-          } else if (removedAboveOrAt > 0) {
-            startY = sourceRow * CH;
-          } else {
-            slot.container.y = targetY;
-            continue;
-          }
+          const survivorIndex = row - newCount; // индекс в массиве survivors
+          const isNew = survivorIndex < 0;
 
-          slot.container.y = startY;
-          items.push({ slot, startY, targetY, vy: 0, landed: false });
+          if (isNew) {
+            // Новый символ — падает сверху. Стартует выше экрана.
+            const startY = -(newCount - row) * CH;
+            slot.container.y = startY;
+            items.push({ slot, startY, targetY, vy: 0, landed: false });
+          } else {
+            // Выживший — был в beforeRow = survivors[survivorIndex].beforeRow
+            const beforeRow = survivors[survivorIndex].beforeRow;
+            const startY    = beforeRow * CH;
+            if (startY === targetY) {
+              // Уже на месте — не двигаем
+              slot.container.y = targetY;
+            } else {
+              // Нужно упасть вниз на новую позицию
+              slot.container.y = startY;
+              items.push({ slot, startY, targetY, vy: 0, landed: false });
+            }
+          }
         }
       }
 
       if (items.length === 0) { resolve(); return; }
 
       const tick = (ticker: PIXI.Ticker) => {
-        const spd2 = speedMultRef.current;            // актуальная скорость каждый кадр
-        const dt   = ticker.elapsedMS / (1000 / 60); // нормализуем к 60fps
+        const spd2 = speedMultRef.current;
+        const dt   = ticker.elapsedMS / (1000 / 60);
         let allDone = true;
         items.forEach(item => {
           if (item.landed) return;
@@ -658,8 +722,8 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
           item.slot.container.y += item.vy * dt;
           if (item.slot.container.y >= item.targetY) {
             item.slot.container.y = item.targetY;
-            const effectiveBounce = BOUNCE / spd2;          // при ускорении меньше отскок
-            const stopThreshold   = 0.6 * Math.sqrt(spd2);  // выше порог остановки
+            const effectiveBounce = BOUNCE / spd2;
+            const stopThreshold   = 0.6 * Math.sqrt(spd2);
             item.vy = -(item.vy * effectiveBounce);
             if (Math.abs(item.vy) < stopThreshold) {
               item.vy = 0;
@@ -706,14 +770,13 @@ export default function GameCanvas({ gameEngine, isSpinning = false, soundEnable
   const getSlotAt   = (key: string) => { const [r, c] = key.split('-').map(Number); return getSlotAtRC(r, c); };
   const getSlotAtRC = (row: number, col: number) => reelsRef.current[col]?.slots[row + BUFFER] ?? null;
   const sleep = (ms: number) => new Promise<void>(r => {
-    // Проверяем скорость каждые 16ms чтобы реагировать на ускорение во время паузы
     let elapsed = 0;
     const interval = setInterval(() => {
       elapsed += 16 * speedMultRef.current;
       if (elapsed >= ms) { clearInterval(interval); r(); }
     }, 16);
   });
-  const lerpColor   = (a: number, b: number, t: number) => {
+  const lerpColor = (a: number, b: number, t: number) => {
     const tc = Math.max(0, Math.min(1, t));
     const [ar,ag,ab] = [(a>>16)&0xff,(a>>8)&0xff,a&0xff];
     const [br,bg,bb] = [(b>>16)&0xff,(b>>8)&0xff,b&0xff];

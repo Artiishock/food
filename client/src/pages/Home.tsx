@@ -5,6 +5,7 @@ import BottomControlBar from '../components/BottomControlBar';
 import LeftBanners from '../components/LeftBanners';
 import OrdersDisplay from '../components/OrdersDisplay';
 import FreeSpinsBanner from '../components/FreeSpinsBanner';
+import FreeSpinsWinOverlay from '../components/Freespinswinoverlay';
 import TipsNotification from '../components/TipsNotification';
 import { GameEngine, Order } from '../lib/gameEngine';
 import symbolsConfig from '../config/symbols.json';
@@ -22,8 +23,13 @@ export default function Home() {
   const [superBonusAwarded, setSuperBonusAwarded] = useState(false);
   const [superBonusAmount, setSuperBonusAmount] = useState(0);
 
+  // Free spins win overlay
+  const [showFreeSpinsWin, setShowFreeSpinsWin] = useState(false);
+  const [freeSpinsTotalWin, setFreeSpinsTotalWin] = useState(0);
+
   const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
   const [isFast, setIsFast] = useState(false);
+  const isFastRef = useRef(false); // persists across spins
 
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [lastWin, setLastWin] = useState(0);
@@ -31,15 +37,15 @@ export default function Home() {
   const ordersAnimTriggerRef = useRef<(() => Promise<void>) | null>(null);
   const isSpinningRef = useRef(false);
   const freeSpinsAutoRef = useRef(false);
+  const freeSpinsTotalWinRef = useRef(0);
 
   const handleSpin = async () => {
     if (isSpinningRef.current) return;
     isSpinningRef.current = true;
     setLastWin(0);
-    setIsFast(false);
+    setIsFast(isFastRef.current);
     try {
       gameEngine.prepare();
-
       setIsSpinning(true);
       await gameEngine.spin();
     } catch (error) {
@@ -55,14 +61,31 @@ export default function Home() {
   const handleSpinComplete = () => {
     setIsSpinning(false);
     isSpinningRef.current = false;
-    setIsFast(false);
+    setIsFast(isFastRef.current);
     setPendingOrders([]);
     const newState = gameEngine.getState();
     setGameState(newState);
     setLastWin(newState.totalWin ?? 0);
 
-    // During free spins orders are replaced — no notification per spin
-    // Only show notification for normal mode completed orders
+    // Accumulate free spins total win
+    if (newState.isFreeSpins || freeSpinsAutoRef.current) {
+      freeSpinsTotalWinRef.current += newState.totalWin ?? 0;
+    }
+
+    // Detect free spins session just ended
+    const wasFreeSpins = freeSpinsAutoRef.current;
+    if (wasFreeSpins && !newState.isFreeSpins) {
+      freeSpinsAutoRef.current = false;
+      const total = freeSpinsTotalWinRef.current;
+      freeSpinsTotalWinRef.current = 0;
+      if (total > 0) {
+        setFreeSpinsTotalWin(total);
+        setShowFreeSpinsWin(true);
+      }
+      return;
+    }
+
+    // Normal mode: show tips notification for completed orders
     if (!newState.isFreeSpins) {
       const completed = newState.orders.filter(o => o.completed);
       if (completed.length > 0) {
@@ -88,7 +111,6 @@ export default function Home() {
         if (freeSpinsAutoRef.current) handleSpin();
       }, 500);
     } else if (!newState.isFreeSpins) {
-      // Free spins ended — stop auto spin
       freeSpinsAutoRef.current = false;
     }
   };
@@ -110,7 +132,7 @@ export default function Home() {
     try {
       gameEngine.buyFreeSpins(type);
       setGameState(gameEngine.getState());
-      // Start auto-spin for all purchased free spins
+      freeSpinsTotalWinRef.current = 0;
       freeSpinsAutoRef.current = true;
       setTimeout(() => handleSpin(), 300);
     } catch (error) {
@@ -133,6 +155,36 @@ export default function Home() {
   if (!gameState) {
     return <div className="text-center p-8">Loading...</div>;
   }
+
+  const gameBoardWithOverlay = (
+    <div style={{ position: 'relative' }}>
+      <GameCanvas
+        gameEngine={gameEngine}
+        isSpinning={isSpinning}
+        soundEnabled={soundEnabled}
+        onSpinComplete={handleSpinComplete}
+        initialFast={isFastRef.current}
+        onSpeedUpReady={(fn) => setOnSpeedUp(() => fn)}
+        onOrdersAppear={() => {
+          const state = gameEngine.getState();
+          const toShow = state.preparedOrders.length > 0
+            ? state.preparedOrders
+            : state.orders;
+          setPendingOrders(toShow);
+          if (ordersAnimTriggerRef.current) {
+            return ordersAnimTriggerRef.current();
+          }
+          return Promise.resolve();
+        }}
+      />
+      {showFreeSpinsWin && (
+        <FreeSpinsWinOverlay
+          totalWin={freeSpinsTotalWin}
+          onDone={() => setShowFreeSpinsWin(false)}
+        />
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -158,26 +210,7 @@ export default function Home() {
             />
           ) : undefined
         }
-        gameBoard={
-          <GameCanvas
-            gameEngine={gameEngine}
-            isSpinning={isSpinning}
-            soundEnabled={soundEnabled}
-            onSpinComplete={handleSpinComplete}
-            onSpeedUpReady={(fn) => setOnSpeedUp(() => fn)}
-            onOrdersAppear={() => {
-              const state = gameEngine.getState();
-              const toShow = state.preparedOrders.length > 0
-                ? state.preparedOrders
-                : state.orders;
-              setPendingOrders(toShow);
-              if (ordersAnimTriggerRef.current) {
-                return ordersAnimTriggerRef.current();
-              }
-              return Promise.resolve();
-            }}
-          />
-        }
+        gameBoard={gameBoardWithOverlay}
         leftBanners={
           <LeftBanners
             isFreeSpins={gameState.isFreeSpins}
@@ -201,7 +234,11 @@ export default function Home() {
             onInfo={() => console.log('Info')}
             soundEnabled={soundEnabled}
             onToggleSound={() => setSoundEnabled(!soundEnabled)}
-            onSpeedUp={onSpeedUp ? () => { onSpeedUp(); setIsFast(v => !v); } : undefined}
+            onSpeedUp={onSpeedUp ? () => {
+              onSpeedUp();
+              isFastRef.current = !isFastRef.current;
+              setIsFast(isFastRef.current);
+            } : undefined}
             isFast={isFast}
             lastWin={lastWin}
           />
