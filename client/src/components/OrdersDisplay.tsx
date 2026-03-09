@@ -75,7 +75,7 @@ export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayPr
 
   return (
     <div className={`orders-display${isFlashing ? ' orders-display--flash' : ''}`}>
-      <div className="orders-display__title">Active Orders</div>
+
 
       <div className="orders-grid">
         {orders.map((order, index) => {
@@ -90,22 +90,23 @@ export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayPr
             >
               {isNew && <div className="order-card__new-badge">NEW!</div>}
               {isCompleted && <div className="order-card__done">✓</div>}
-
+            <div className="row">
               {/* Symbol icon */}
               <div className="order-card__icon-wrap">
                 <SymbolIcon symbolId={order.symbolId} />
               </div>
-
+              <div className="order-card__tip">X{order.tipMultiplier} </div>
               {/* Big quantity number */}
-              <div className="order-card__quantity">{order.quantity}x</div>
-
+                            {/* <div className="order-card__quantity">{order.quantity}x</div> */}
+            </div>
               {/* Progress like "8/15" */}
-              <div className="order-card__progress-text">
-                {order.collected}/{order.quantity}
-              </div>
 
               {/* Thin bar */}
-              <div className="order-card__bar">
+              <div className="order-card__bar"> 
+                            <div className="order-card__progress-text">
+                {order.collected}/{order.quantity}
+
+              </div>
                 <div
                   className={`order-card__bar-fill${isCompleted ? ' order-card__bar-fill--completed' : ''}`}
                   style={{ width: `${progress}%` }}
@@ -113,7 +114,7 @@ export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayPr
               </div>
 
               {/* Tip */}
-              <div className="order-card__tip">{order.tipMultiplier}x tip</div>
+
             </div>
           );
         })}
