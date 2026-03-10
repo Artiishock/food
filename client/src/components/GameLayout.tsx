@@ -57,11 +57,15 @@ export default function GameLayout({
       scalerRef.current.style.width           = `${baseW}px`;
       scalerRef.current.style.height          = `${realH}px`;
 
-      // Scale PIXI canvas (800x500) to fit portrait-canvas-wrapper width
+      // Scale PIXI canvas (800x500) to fill portrait-canvas-wrapper completely
       requestAnimationFrame(() => {
         if (canvasWrapperRef.current && canvasScalerRef.current) {
           const wrapperW = canvasWrapperRef.current.clientWidth;
-          const s = wrapperW / 800;
+          const wrapperH = canvasWrapperRef.current.clientHeight;
+          const scaleX = wrapperW / 800;
+          const scaleY = wrapperH / 500;
+          // use min to contain (fit inside wrapper)
+          const s = Math.min(scaleX, scaleY);
           canvasScalerRef.current.style.transform = `scale(${s})`;
         }
       });

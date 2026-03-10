@@ -112,32 +112,30 @@
   box-sizing: border-box;
 }
 
-/* ── Middle: canvas слева + banners справа ──────────
-   flex 7 = ~70% свободного пространства
-   (canvas 430px при высоте 1133px, за вычетом topBanner+bottomBar)
-*/
+/* ── Middle: canvas слева + banners справа ────────── */
 .portrait-middle {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 16px 6px;
+  padding: 100px 16px 6px;
   box-sizing: border-box;
-  flex: 7;
+  flex: 2;
   min-height: 0;
+  overflow: hidden;
 }
 
-/* Обёртка canvas — 11 частей (~69% ширины) */
+/* Обёртка canvas — занимает всю высоту middle, ширина ~69% */
 .portrait-canvas-wrapper {
   flex: 11;
   min-width: 0;
-  aspect-ratio: 8 / 5;
-  flex-shrink: 0;
+  min-height: 0;
+  width: 0;           /* позволяет flex сжимать по ширине */
   overflow: hidden;
   position: relative;
 }
 
-/* Scaler подгоняет PIXI canvas 800x500 под ширину обёртки */
+/* PIXI canvas 800×500 масштабируется через JS под размер обёртки */
 .portrait-canvas-scaler {
   transform-origin: top left;
   position: absolute;
@@ -147,28 +145,29 @@
   height: 500px;
 }
 
-/* Banners справа — 5 частей (~31% ширины) */
+/* Banners справа — ~31% ширины, тоже на всю высоту */
 .portrait-banners {
-  flex: 5;
+  flex: 3;
   min-width: 0;
+  /* высота = высота canvas-wrapper через align-self stretch + max-height */
+  align-self: stretch;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
 }
 
-/* ── Bottom content: logo + orders ─────────────────
-   flex 3 = ~30% свободного пространства
-   (orders ~176px при высоте 1133px)
-*/
+/* ── Bottom content: logo + orders ─────────────────── */
 .portrait-bottom-content {
   display: flex;
   flex-direction: row;
   gap: 12px;
   padding: 6px 16px 12px;
   box-sizing: border-box;
-  flex: 3;
+  flex: 1;
   min-height: 0;
+  align-items: center;
 }
 
 .portrait-logo {

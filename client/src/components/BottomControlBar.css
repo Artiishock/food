@@ -1,10 +1,13 @@
-/* BottomControlBar.css — Fully Responsive */
+/* BottomControlBar.css */
 
+/* ════════════════════════════════════════════════════════════════
+   BASE BAR
+   ════════════════════════════════════════════════════════════════ */
 .bottom-control-bar {
   position: relative;
   width: 100%;
   height: clamp(56px, 8vh, 88px);
-  background: linear-gradient(to top, rgba(6,6,6,0.95) 0%, rgba(6, 6, 6, 0) 100%);
+  background: linear-gradient(to top, rgba(6,6,6,0.95) 0%, rgba(6,6,6,0) 100%);
   display: flex;
   align-items: center;
   padding: 0 clamp(8px, 2vw, 28px);
@@ -13,7 +16,11 @@
   flex-shrink: 0;
 }
 
-/* ─── Левая группа ────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════
+   LANDSCAPE — оригинальный макет
+   ════════════════════════════════════════════════════════════════ */
+
+/* ─── Левая группа ── */
 .left-group {
   display: flex;
   align-items: center;
@@ -39,12 +46,10 @@
   cursor: pointer;
   padding: 0;
   font-size: clamp(9px, 1.2vw, 14px);
+  color: #9F9F9F;
 }
 
-.icon-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
+.icon-button:disabled { opacity: 0.4; cursor: default; }
 
 .info-button {
   width:  clamp(32px, 4.5vw, 54px);
@@ -65,7 +70,7 @@
   height: clamp(12px, 1.8vw, 22px);
 }
 
-/* ─── Центральная группа ──────────────────────────────────────── */
+/* ─── Центральная группа ── */
 .center-group {
   flex: 1;
   display: flex;
@@ -95,11 +100,6 @@
   margin-bottom: 2px;
 }
 
-.info-label_bet {
-  display: flex;
-  justify-content: start;
-}
-
 .info-value {
   font-family: sans-serif;
   font-size: clamp(12px, 2.2vw, 28px);
@@ -108,11 +108,6 @@
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
-
-/* WIN block */
-.win-block {}
-
-.win-label {}
 
 .win-value {
   transition: color 0.3s, transform 0.2s;
@@ -128,7 +123,6 @@
   100% { transform: scale(1); }
 }
 
-/* ─── Блок ставки ─────────────────────────────────────────────── */
 .bet-block {
   display: flex;
   align-items: center;
@@ -169,12 +163,9 @@
   line-height: 1;
 }
 
-.bet-adjust-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
+.bet-adjust-button:disabled { opacity: 0.4; cursor: default; }
 
-/* ─── Правая группа ───────────────────────────────────────────── */
+/* ─── Правая группа ── */
 .right-group {
   display: flex;
   align-items: center;
@@ -182,7 +173,7 @@
   flex-shrink: 0;
 }
 
-/* SPIN кнопка */
+/* SPIN кнопка (landscape) */
 .spin-button {
   width:  clamp(40px, 5.5vw, 62px);
   height: clamp(40px, 5.5vw, 62px);
@@ -190,6 +181,7 @@
   background: radial-gradient(circle at 40% 35%, #555 0%, #1a1a1a 100%);
   border: 2px solid #555;
   font-size: clamp(18px, 2.8vw, 34px);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -199,21 +191,43 @@
   box-shadow: 0 0 12px rgba(0,0,0,0.6);
 }
 
-.spin-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+.spin-button:disabled { opacity: 0.5; cursor: default; }
 
-.spin-button--spinning {
-  background: rgba(30,30,30,0.8);
-}
+.spin-button--spinning { background: rgba(30,30,30,0.8); }
 
 .spin-button--fast {
   background: radial-gradient(circle at 40% 35%, #f39c12 0%, #8a5a00 100%) !important;
   border-color: #f39c12 !important;
-  box-shadow: 0 0 16px rgba(243, 156, 18, 0.5) !important;
+  box-shadow: 0 0 16px rgba(243,156,18,0.5) !important;
 }
 
+/* AUTO кнопка (landscape) */
+.auto-spin-wrapper { position: relative; }
+
+.auto-button {
+  width:  clamp(28px, 3.8vw, 44px);
+  height: clamp(28px, 3.8vw, 44px);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid #9F9F9F;
+  font-size: clamp(16px, 2.2vw, 30px);
+  color: #9F9F9F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auto-button:disabled { opacity: 0.4; cursor: default; }
+
+.auto-button--active {
+  background: rgba(192,57,43,0.25) !important;
+  border-color: #c0392b !important;
+  color: #c0392b !important;
+}
+
+/* shared helpers */
 .speed-btn-inner {
   display: flex;
   flex-direction: column;
@@ -226,36 +240,6 @@
   font-size: clamp(6px, 0.9vw, 10px);
   font-weight: 900;
   color: #fff;
-}
-
-/* AUTO кнопка */
-.auto-spin-wrapper {
-  position: relative;
-}
-
-.auto-button {
-  width:  clamp(28px, 3.8vw, 44px);
-  height: clamp(28px, 3.8vw, 44px);
-  border-radius: 50%;
-  background: rgba(0,0,0,0.45);
-  border: 1px solid #9F9F9F;
-  font-size: clamp(16px, 2.2vw, 30px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-}
-
-.auto-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.auto-button--active {
-  background: rgba(192, 57, 43, 0.25) !important;
-  border-color: #c0392b !important;
-  color: #c0392b !important;
 }
 
 .auto-stop-inner {
@@ -272,17 +256,17 @@
   color: currentColor;
 }
 
-/* ─── Выпадающее меню авто-спина ──────────────────────────────── */
+/* ─── Выпадающее меню авто-спина ── */
 .auto-spin-menu {
   position: absolute;
   bottom: calc(100% + 10px);
   right: 0;
-  background: rgba(12, 12, 20, 0.98);
+  background: rgba(12,12,20,0.98);
   border: 1px solid #333;
   border-radius: 10px;
   padding: 4px 0;
   min-width: clamp(110px, 14vw, 140px);
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.8);
   z-index: 1000;
   animation: menuAppear 0.15s ease;
 }
@@ -319,13 +303,188 @@
 }
 
 .auto-spin-menu__item:hover {
-  background: rgba(250, 203, 50, 0.1);
+  background: rgba(250,203,50,0.1);
   color: #FACB32;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   TABLET ≤ 768px
-   ═══════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════
+   PORTRAIT — новый макет со скриншота (высота > ширина)
+   [ℹ️ CREDIT/BET]  [WIN]  [AUTO ≡]
+   + Spin кластер выступает вверх над баром
+   ════════════════════════════════════════════════════════════════ */
+.bottom-control-bar--portrait {
+  height: 76px;
+  padding-top: 10px;
+  overflow: visible;
+
+}
+
+/* Spin + ± выступают над баром */
+.portrait-spin-cluster {
+  position: absolute;
+  top: -80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 20;
+}
+
+.portrait-bet-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #4a4a5a 0%, #1e1e28 100%);
+  border: 2px solid #666;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.portrait-bet-btn:disabled { opacity: 0.4; cursor: default; }
+.portrait-bet-btn:active:not(:disabled) { transform: scale(0.93); }
+
+/* Spin кнопка в portrait */
+.spin-button--portrait {
+  width: 82px !important;
+  height: 82px !important;
+  font-size: 34px !important;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.7) !important;
+}
+
+/* ── Левая часть бара: ℹ️ + стопка CREDIT/BET ── */
+.portrait-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.portrait-info-btn {
+  width: clamp(34px, 7vw, 48px);
+  height: clamp(34px, 7vw, 48px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #4a4a5a 0%, #1e1e28 100%);
+  border: 1.5px solid #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.portrait-info-btn svg {
+  width: clamp(13px, 2.8vw, 20px);
+  height: clamp(13px, 2.8vw, 20px);
+}
+
+.portrait-info-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.portrait-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.portrait-label {
+  font-family: sans-serif;
+  font-size: clamp(8px, 1.8vw, 13px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #FACB32;
+  text-transform: uppercase;
+  min-width: clamp(32px, 6.5vw, 46px);
+}
+
+.portrait-value {
+  font-family: sans-serif;
+  font-size: clamp(10px, 2.2vw, 16px);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+/* ── Центр: WIN ── */
+.portrait-bar-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.portrait-win-label {
+  font-family: sans-serif;
+  font-size: clamp(13px, 3vw, 20px);
+  font-weight: 900;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.portrait-win-value {
+  font-family: sans-serif;
+  font-size: clamp(14px, 3.5vw, 24px);
+  font-weight: 900;
+  color: #FACB32;
+  white-space: nowrap;
+  transition: color 0.3s, transform 0.2s;
+}
+
+.portrait-win-value--active {
+  color: #FACB32;
+  animation: win-pop 0.3s ease-out;
+}
+
+/* ── Правые кнопки: AUTO | ≡ ── */
+.portrait-bar-right {
+  display: flex;
+  align-items: center;
+  gap: clamp(6px, 1.5vw, 14px);
+  flex-shrink: 0;
+}
+
+.portrait-icon-btn {
+  width:  clamp(34px, 7vw, 50px);
+  height: clamp(34px, 7vw, 50px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #4a4a5a 0%, #1e1e28 100%);
+  border: 1.5px solid #555;
+  color: #9F9F9F;
+  font-size: clamp(15px, 3.5vw, 24px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s;
+}
+
+.portrait-icon-btn:hover { border-color: #888; }
+
+.portrait-icon-btn--active {
+  background: radial-gradient(circle at 40% 30%, rgba(192,57,43,0.35) 0%, rgba(192,57,43,0.12) 100%) !important;
+  border-color: #c0392b !important;
+  color: #c0392b !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   LANDSCAPE MEDIA QUERIES
+   ════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
   .center-group {
     gap: clamp(6px, 2.5vw, 20px);
@@ -333,37 +492,14 @@
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   MOBILE ≤ 600px — скрываем info button и WIN блок
-   ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 600px) {
-  .info-button {
-    display: none;
-  }
-
-  .win-block {
-    display: none;
-  }
-
-  .center-group {
-    padding: 0 clamp(4px, 2vw, 12px);
-    gap: clamp(8px, 4vw, 20px);
-  }
-
-  .bottom-control-bar {
-    padding: 0 clamp(6px, 3vw, 16px);
-  }
+  .info-button { display: none; }
+  .win-block   { display: none; }
+  .center-group { padding: 0 clamp(4px, 2vw, 12px); gap: clamp(8px, 4vw, 20px); }
+  .bottom-control-bar { padding: 0 clamp(6px, 3vw, 16px); }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   ОЧЕНЬ МАЛЕНЬКИЙ ≤ 400px — скрываем icon-stack
-   ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 400px) {
-  .icon-stack {
-    display: none;
-  }
-
-  .bet-value {
-    min-width: 40px;
-  }
+  .icon-stack  { display: none; }
+  .bet-value   { min-width: 40px; }
 }

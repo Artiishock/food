@@ -29,10 +29,15 @@ export default function Home() {
 
   const [onSpeedUp, setOnSpeedUp] = useState<(() => void) | null>(null);
   const [isFast, setIsFast] = useState(false);
-  const isFastRef = useRef(false); // persists across spins
+  const isFastRef = useRef(false);
 
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [lastWin, setLastWin] = useState(0);
+
+  // ← НОВОЕ: отслеживаем ориентацию для BottomControlBar
+  const [isPortrait, setIsPortrait] = useState(
+    () => window.innerHeight > window.innerWidth
+  );
 
   const ordersAnimTriggerRef = useRef<(() => Promise<void>) | null>(null);
   const isSpinningRef = useRef(false);
@@ -221,6 +226,8 @@ export default function Home() {
             isSpinning={isSpinning}
           />
         }
+        // ← НОВОЕ: передаём callback для отслеживания ориентации
+        onOrientationChange={setIsPortrait}
         bottomBar={
           <BottomControlBar
             balance={gameState.balance}
@@ -241,6 +248,8 @@ export default function Home() {
             } : undefined}
             isFast={isFast}
             lastWin={lastWin}
+            // ← НОВОЕ: передаём текущую ориентацию
+            isPortrait={isPortrait}
           />
         }
       />
