@@ -52,6 +52,18 @@ function SymbolIcon({ symbolId }: { symbolId: string }) {
 
 export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayProps) {
   const [isFlashing, setIsFlashing] = useState(false);
+  // portrait = height > width
+  const [isPortrait, setIsPortrait] = useState(
+    () => window.innerHeight > window.innerWidth
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const triggerFn = (): Promise<void> => {
@@ -73,11 +85,11 @@ export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayPr
     return null;
   }
 
+  const gridClass = `orders-grid${isPortrait ? ' orders-grid--portrait' : ''}`;
+
   return (
     <div className={`orders-display${isFlashing ? ' orders-display--flash' : ''}`}>
-
-
-      <div className="orders-grid">
+      <div className={gridClass}>
         {orders.map((order, index) => {
           const progress = Math.min((order.collected / order.quantity) * 100, 100);
           const isCompleted = order.completed;
@@ -90,31 +102,22 @@ export default function OrdersDisplay({ orders, onReadyToShow }: OrdersDisplayPr
             >
               {isNew && <div className="order-card__new-badge">NEW!</div>}
               {isCompleted && <div className="order-card__done">✓</div>}
-            <div className="row">
-              {/* Symbol icon */}
-              <div className="order-card__icon-wrap">
-                <SymbolIcon symbolId={order.symbolId} />
+              <div className="row">
+                <div className="order-card__icon-wrap">
+                  <SymbolIcon symbolId={order.symbolId} />
+                </div>
+                <div className="order-card__tip">X{order.tipMultiplier}</div>
               </div>
-              <div className="order-card__tip">X{order.tipMultiplier} </div>
-              {/* Big quantity number */}
-                            {/* <div className="order-card__quantity">{order.quantity}x</div> */}
-            </div>
-              {/* Progress like "8/15" */}
 
-              {/* Thin bar */}
-              <div className="order-card__bar"> 
-                            <div className="order-card__progress-text">
-                {order.collected}/{order.quantity}
-
-              </div>
+              <div className="order-card__bar">
+                <div className="order-card__progress-text">
+                  {order.collected}/{order.quantity}
+                </div>
                 <div
                   className={`order-card__bar-fill${isCompleted ? ' order-card__bar-fill--completed' : ''}`}
                   style={{ width: `${progress}%` }}
                 />
               </div>
-
-              {/* Tip */}
-
             </div>
           );
         })}

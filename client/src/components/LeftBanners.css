@@ -177,7 +177,7 @@
   .banner-card,
   .free-spins-banner {
     min-height: clamp(56px, 10vw, 90px);
-    flex-direction: row;
+
     align-items: center;
     gap: clamp(6px, 1.5vw, 14px);
     padding: clamp(6px, 1.5vw, 12px);

@@ -18,18 +18,18 @@
   text-align: center;
   border-bottom: 2px solid #555;
 }
-.row{
+
+.row {
   display: flex;
   flex-direction: row;
   gap: 4px;
 }
 
-.order-card__bar{
+.order-card__bar {
   height: 10px !important;
-
 }
 
-.order-card__progress-text{
+.order-card__progress-text {
   position: absolute;
   top: 81.7%;
   left: 50%;
@@ -38,7 +38,7 @@
   font-weight: 900;
 }
 
-/* 2-column grid */
+/* ── Grid: 2 колонки по умолчанию (landscape) ─────── */
 .orders-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -46,14 +46,12 @@
   padding: 4px;
 }
 
-@media (width<height) {
-  .orders-grid {
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-  }
-  
+/* ── 4 колонки когда portrait (класс добавляется через JS) */
+.orders-grid--portrait {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
 }
 
-/* Compact order card */
+/* ── Order card ───────────────────────────────────── */
 .order-card {
   background-color: #d4d4d4;
   border: 1.5px solid #999;
@@ -169,7 +167,7 @@
   font-weight: 900;
 }
 
-/* Flash animation for the orders box */
+/* Flash animation */
 @keyframes orders-flash {
   0%   { box-shadow: 0 0 0px 0px rgba(255, 204, 0, 0); }
   20%  { box-shadow: 0 0 30px 12px rgba(255, 204, 0, 0.85); }
