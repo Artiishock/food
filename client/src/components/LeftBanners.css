@@ -1,240 +1,241 @@
-/* LeftBanners.css — Fully Responsive */
+/* LeftBanners.css */
 
-/* ─── Banner Card ─────────────────────────────────────────────── */
-.banner-card {
-  background-color: #ffffff;
-  padding: clamp(6px, 1vw, 16px) clamp(8px, 1.2vw, 20px);
-  border-radius: clamp(4px, 0.6vw, 8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+/* ─── Общая кнопка-карточка ──────────────────────── */
+.banner-btn {
+  width: 100%;
+  flex: 1;
+  height: fit-content !important;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
-  flex: 1;
-  min-height: clamp(64px, 9vw, 120px);
+  gap: 2px;
+
+  background: #f0f0f0;
+  border: 2px solid #d0d0d0;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 #b0b0b0, 0 4px 12px rgba(0,0,0,0.10);
+
+  padding: 10px 8px;
   box-sizing: border-box;
-}
-
-.banner-title {
-  font-size: clamp(8px, 1vw, 12px);
-  font-weight: 700;
-  color: #374151;
-  margin-bottom: clamp(2px, 0.4vw, 5px);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ─── Buy buttons ─────────────────────────────────────────────── */
-.buy-button {
-  margin-top: clamp(2px, 0.4vw, 5px);
-  font-size: clamp(7px, 0.85vw, 11px);
-  font-weight: 700;
-  padding: clamp(4px, 0.6vw, 8px) clamp(4px, 0.6vw, 10px);
-  border: none;
-  border-radius: 4px;
-  color: #ffffff;
   cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  width: 100%;
-  white-space: nowrap;
+  text-align: center;
+  transition: transform 0.1s, box-shadow 0.1s, filter 0.1s;
+  position: relative;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.buy-button:active {
-  transform: scale(0.97);
+.banner-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b0b0b0, 0 2px 6px rgba(0,0,0,0.10);
 }
 
-.buy-button:disabled {
-  opacity: 0.5;
+.banner-btn:disabled {
+  opacity: 0.45;
   cursor: default;
 }
 
-.buy-button.cheap {
-  background-color: #3b82f6;
-}
-
-.buy-button.cheap:hover:not(:disabled) {
-  background-color: #2563eb;
-}
-
-.buy-button.standard {
-  background-color: #22c55e;
-}
-
-.buy-button.standard:hover:not(:disabled) {
-  background-color: #16a34a;
-}
-
-/* ─── Free Spins Active Banner ────────────────────────────────── */
-.free-spins-banner {
-  background-color: #fde047;
-  padding: clamp(8px, 1.2vw, 20px);
-  border-radius: clamp(4px, 0.6vw, 8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  border: 2px solid #eab308;
-  flex: 1;
-  min-height: clamp(64px, 9vw, 120px);
-}
-
-.free-spins-title {
-  font-size: clamp(8px, 1vw, 14px);
-  font-weight: 700;
-  color: #1f2937;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.free-spins-count {
-  font-size: clamp(18px, 2.5vw, 36px);
+/* ─── Заголовок ── */
+.banner-btn__title {
+  font-family: sans-serif;
+  font-size: 1.4rem;
   font-weight: 900;
-  color: #1f2937;
-  margin-top: clamp(2px, 0.4vw, 5px);
+  color: #1a1a1a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+/* ─── Цена ── */
+.banner-btn__price {
+  font-family: sans-serif;
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+/* ════════════════════════════════════════════════════
+   STANDARD — зелёная обводка
+   ════════════════════════════════════════════════════ */
+.banner-btn--standard {
+  border-color: #b8d9b0;
+  background: linear-gradient(160deg, #f8fff6 0%, #edfae8 100%);
+  box-shadow: 0 3px 0 #8fbc87, 0 4px 14px rgba(34,197,94,0.12);
+}
+
+.banner-btn--standard:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+/* ════════════════════════════════════════════════════
+   SUPER — с ярким лейблом посередине
+   ════════════════════════════════════════════════════ */
+.banner-btn--super {
+  border-color: #c8c0d8;
+  background: linear-gradient(160deg, #f8f6ff 0%, #ede8fa 100%);
+  box-shadow: 0 3px 0 #9f8fc0, 0 4px 14px rgba(139,92,246,0.12);
+}
+
+.banner-btn--super:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+.banner-btn__super-label {
+  font-family: sans-serif;
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #4ebd3b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  /* выдавленный эффект как на скриншоте */
+  text-shadow:
+    1px 1px 0 #c4b5fd,
+    2px 2px 0 #a78bfa,
+    -1px -1px 0 #ede9fe;
   line-height: 1;
 }
 
-/* ─── Ante Toggle ─────────────────────────────────────────────── */
-.ante-toggle-row {
+/* ════════════════════════════════════════════════════
+   ANTE BET
+   ════════════════════════════════════════════════════ */
+.banner-btn--ante {
+  border-color: #d0d0d0;
+  background: linear-gradient(160deg, #f8f8f8 0%, #efefef 100%);
+  box-shadow: 0 3px 0 #b0b0b0, 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.banner-btn--ante-on {
+  border-color: #86efac;
+  background: linear-gradient(160deg, #f0fff4 0%, #dcfce7 100%);
+  box-shadow: 0 3px 0 #4ade80, 0 4px 14px rgba(34,197,94,0.15);
+}
+
+.banner-btn__ante-price {
+  font-family: sans-serif;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #374151;
+  letter-spacing: -0.01em;
+  /* зачёркнутый стиль как на скриншоте */
+  /* text-decoration: line-through; */
+  /* text-decoration-color: #ef4444; */
+  line-height: 1.1;
+}
+
+.banner-btn--ante-on .banner-btn__ante-price {
+  text-decoration: none;
+  color: #15803d;
+}
+
+.banner-btn__ante-sub {
+  font-family: sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  line-height: 1.3;
+  text-align: center;
+  margin-top: 1px;
+}
+
+/* Кнопка-переключатель внутри карточки */
+.banner-btn__ante-toggle {
   display: flex;
   align-items: center;
-  gap: clamp(4px, 0.8vw, 10px);
-  margin-top: clamp(4px, 0.8vw, 10px);
-  flex-wrap: wrap;
-}
-
-.ante-label {
-  font-size: clamp(8px, 1vw, 13px);
+  gap: 6px;
+  margin-top: 4px;
+  background: #d1d5db;
+  border-radius: 6px;
+  padding: 3px 10px 3px 6px;
+  font-size: clamp(8px, 1vw, 12px);
   font-weight: 700;
-  color: #9ca3af;
-  transition: color 0.2s;
-  min-width: clamp(16px, 2vw, 30px);
-  text-align: center;
+  color: #374151;
+  transition: background 0.2s;
 }
 
-.ante-label--active {
-  color: #111827;
+.banner-btn__ante-toggle--on {
+  background: #22c55e;
+  color: #fff;
 }
 
-/* Pill track */
-.ante-switch {
-  position: relative;
-  width: clamp(30px, 4vw, 48px);
-  height: clamp(16px, 2.2vw, 26px);
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  transition: background-color 0.25s ease;
-  flex-shrink: 0;
+.banner-btn__ante-arrow {
+  font-size: clamp(7px, 0.9vw, 11px);
+  opacity: 0.7;
 }
 
-.ante-switch--off {
-  background-color: #d1d5db;
+.banner-btn__ante-state {
+  font-weight: 900;
+  letter-spacing: 0.05em;
 }
 
-.ante-switch--on {
-  background-color: #22c55e;
-}
-
-.ante-switch:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* Thumb */
-.ante-switch-thumb {
-  display: block;
-  width: clamp(11px, 1.5vw, 20px);
-  height: clamp(11px, 1.5vw, 20px);
-  background: #ffffff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  transition: left 0.25s ease;
-}
-
-.ante-switch--off .ante-switch-thumb {
-  left: clamp(2px, 0.3vw, 4px);
-}
-
-.ante-switch--on .ante-switch-thumb {
-  left: calc(100% - clamp(11px, 1.5vw, 20px) - clamp(2px, 0.3vw, 4px));
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   TABLET ≤ 900px — горизонтальное расположение карточек
-   ═══════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════
+   PORTRAIT — компактнее (баннеры в узкой колонке)
+   ════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
-  .banner-card,
-  .free-spins-banner {
-    min-height: clamp(56px, 10vw, 90px);
-
-    align-items: center;
-    gap: clamp(6px, 1.5vw, 14px);
-    padding: clamp(6px, 1.5vw, 12px);
+  .banner-btn {
+    min-height: 60px;
+    padding: 6px 6px;
+    gap: 1px;
+    border-radius: 10px;
   }
 
-  .banner-title {
-    white-space: nowrap;
-    margin-bottom: 0;
-    flex-shrink: 0;
-  }
-
-  .buy-button {
-    margin-top: 0;
-    flex-shrink: 0;
-    width: auto;
-    min-width: clamp(60px, 10vw, 120px);
-  }
-
-  .free-spins-title {
-    margin-bottom: 0;
-    flex-shrink: 0;
-  }
-
-  .free-spins-count {
-    margin-top: 0;
-  }
-
-  .ante-toggle-row {
-    margin-top: 0;
-    flex-wrap: nowrap;
-  }
-
-  /* Скрываем длинные тексты — только переключатель */
-  .ante-label {
-    display: none;
+  .banner-btn__super-label {
+    font-size: clamp(11px, 2.5vw, 16px);
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   MOBILE ≤ 600px
-   ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 600px) {
-  .banner-card,
-  .free-spins-banner {
-    min-height: clamp(48px, 12vw, 70px);
-    padding: clamp(5px, 2vw, 10px);
-    gap: clamp(4px, 1.5vw, 8px);
+  .banner-btn {
+    min-height: 50px;
+    border-radius: 8px;
   }
+}
 
-  .banner-title {
-    font-size: clamp(7px, 2vw, 10px);
-    letter-spacing: 0;
-  }
+/* ════════════════════════════════════════════════════
+   PORTRAIT modifier — узкая колонка справа от canvas
+   ════════════════════════════════════════════════════ */
+.banner-btn--portrait {
+  min-height: 0;
+  flex: 1;
+  border-radius: 10px;
+  padding: 4px 6px;
+  gap: 1px;
+}
 
-  .buy-button {
-    font-size: clamp(7px, 2vw, 10px);
-    padding: clamp(3px, 1vw, 6px) clamp(4px, 1.5vw, 8px);
-    min-width: clamp(48px, 14vw, 90px);
-  }
+.banner-btn--portrait .banner-btn__title {
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.banner-btn--portrait .banner-btn__price {
+  font-size: 0.75rem;
+  margin-top: 1px;
+}
+
+.banner-btn--portrait .banner-btn__super-label {
+  font-size: 0.7rem;
+  text-shadow: 1px 1px 0 #c4b5fd, -1px -1px 0 #ede9fe;
+}
+
+.banner-btn--portrait .banner-btn__ante-price {
+  font-size: 0.7rem;
+}
+
+.banner-btn--portrait .banner-btn__ante-sub {
+  font-size: 0.55rem;
+  line-height: 1.2;
+}
+
+.banner-btn--portrait .banner-btn__ante-toggle {
+  padding: 2px 6px 2px 4px;
+  gap: 4px;
+  font-size: 0.6rem;
+  border-radius: 4px;
+}
+
+.banner-btn--portrait .banner-btn__ante-arrow {
+  font-size: 0.55rem;
 }

@@ -23,7 +23,6 @@ export default function Home() {
   const [superBonusAwarded, setSuperBonusAwarded] = useState(false);
   const [superBonusAmount, setSuperBonusAmount] = useState(0);
 
-  // Free spins win overlay
   const [showFreeSpinsWin, setShowFreeSpinsWin] = useState(false);
   const [freeSpinsTotalWin, setFreeSpinsTotalWin] = useState(0);
 
@@ -34,7 +33,6 @@ export default function Home() {
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [lastWin, setLastWin] = useState(0);
 
-  // ← НОВОЕ: отслеживаем ориентацию для BottomControlBar
   const [isPortrait, setIsPortrait] = useState(
     () => window.innerHeight > window.innerWidth
   );
@@ -72,12 +70,10 @@ export default function Home() {
     setGameState(newState);
     setLastWin(newState.totalWin ?? 0);
 
-    // Accumulate free spins total win
     if (newState.isFreeSpins || freeSpinsAutoRef.current) {
       freeSpinsTotalWinRef.current += newState.totalWin ?? 0;
     }
 
-    // Detect free spins session just ended
     const wasFreeSpins = freeSpinsAutoRef.current;
     if (wasFreeSpins && !newState.isFreeSpins) {
       freeSpinsAutoRef.current = false;
@@ -90,7 +86,6 @@ export default function Home() {
       return;
     }
 
-    // Normal mode: show tips notification for completed orders
     if (!newState.isFreeSpins) {
       const completed = newState.orders.filter(o => o.completed);
       if (completed.length > 0) {
@@ -110,7 +105,6 @@ export default function Home() {
       }
     }
 
-    // Auto-spin: continue while free spins remain
     if (freeSpinsAutoRef.current && newState.isFreeSpins && newState.freeSpinsRemaining > 0) {
       setTimeout(() => {
         if (freeSpinsAutoRef.current) handleSpin();
@@ -224,14 +218,16 @@ export default function Home() {
             onBuyFreeSpins={handleBuyFreeSpins}
             onAnteChange={handleAnteChange}
             isSpinning={isSpinning}
+            currentBet={gameState.currentBet}
+            isPortrait={isPortrait}
           />
         }
-        // ← НОВОЕ: передаём callback для отслеживания ориентации
         onOrientationChange={setIsPortrait}
         bottomBar={
           <BottomControlBar
             balance={gameState.balance}
             currentBet={gameState.currentBet}
+            isPortrait={isPortrait}
             isSpinning={isSpinning}
             onSpin={handleSpin}
             onBetIncrease={handleBetIncrease}
@@ -248,7 +244,6 @@ export default function Home() {
             } : undefined}
             isFast={isFast}
             lastWin={lastWin}
-            // ← НОВОЕ: передаём текущую ориентацию
             isPortrait={isPortrait}
           />
         }

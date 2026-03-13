@@ -8,6 +8,8 @@ interface LeftBannersProps {
   onBuyFreeSpins: (type: 'cheap' | 'standard') => void;
   onAnteChange: (mode: 'none' | 'low' | 'high') => void;
   isSpinning: boolean;
+  currentBet?: number;
+  isPortrait?: boolean;
 }
 
 export default function LeftBanners({
@@ -17,53 +19,57 @@ export default function LeftBanners({
   onBuyFreeSpins,
   onAnteChange,
   isSpinning,
+  currentBet = 10,
+  isPortrait = false,
 }: LeftBannersProps) {
   const anteEnabled = anteMode === 'low';
+  const cheapPrice    = currentBet * 50;
+  const standardPrice = currentBet * 100;
+  const p = isPortrait ? ' banner-btn--portrait' : '';
+
+  const fmt = (val: number) =>
+    '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <>
-      {/* Standard (expensive) package — 10 FS */}
-      <div className="banner-card">
-        <div className="banner-title">BIG FS Package</div>
-        <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>10 free spins</div>
-        <button
-          className="buy-button standard"
-          onClick={() => onBuyFreeSpins('standard')}
-          disabled={isSpinning || isFreeSpins}
-        >
-          BUY (100×) — 10 FS
-        </button>
-      </div>
+      {/* BUY FREE SPINS — Standard (100x) */}
+      <button
+        className={`banner-btn banner-btn--standard${p}`}
+        onClick={() => onBuyFreeSpins('standard')}
+        disabled={isSpinning || isFreeSpins}
+      >
+        <span className="banner-btn__title">BUY<br/><span className="banner-btn__super-label">SUPER</span><br/>FREE SPINS</span>
 
-      {/* Cheap package — 10 FS (was incorrectly showing 5) */}
-      <div className="banner-card">
-        <div className="banner-title">STANDARD FS Package</div>
-        <div style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '4px' }}>10 free spins</div>
-        <button
-          className="buy-button cheap"
-          onClick={() => onBuyFreeSpins('cheap')}
-          disabled={isSpinning || isFreeSpins}
-        >
-          BUY (50×) — 10 FS
-        </button>
-      </div>
+        <span className="banner-btn__price">{fmt(standardPrice)}</span>
+      </button>
 
-      {/* Ante Mode — toggle switch ×1 / ×1.25 */}
-      <div className="banner-card">
-        <div className="banner-title">Ante Bet</div>
-        <div className="ante-toggle-row">
-          <span className={`ante-label ${!anteEnabled ? 'ante-label--active' : ''}`}>×1</span>
-          <button
-            className={`ante-switch ${anteEnabled ? 'ante-switch--on' : 'ante-switch--off'}`}
-            onClick={() => onAnteChange(anteEnabled ? 'none' : 'low')}
-            disabled={isSpinning}
-            aria-label="Toggle ante bet"
-          >
-            <span className="ante-switch-thumb" />
-          </button>
-          <span className={`ante-label ${anteEnabled ? 'ante-label--active' : ''}`}>×1.25</span>
-        </div>
-      </div>
+      {/* BUY SUPER FREE SPINS — Cheap (50x) */}
+      <button
+        className={`banner-btn banner-btn--super${p}`}
+        onClick={() => onBuyFreeSpins('cheap')}
+        disabled={isSpinning || isFreeSpins}
+      >
+        <span className="banner-btn__title">BUY</span>
+
+        <span className="banner-btn__title">FREE SPINS</span>
+        <span className="banner-btn__price">{fmt(cheapPrice)}</span>
+      </button>
+
+      {/* ANTE BET toggle */}
+      <button
+        className={`banner-btn banner-btn--ante${anteEnabled ? ' banner-btn--ante-on' : ''}${p}`}
+        onClick={() => !isSpinning && onAnteChange(anteEnabled ? 'none' : 'low')}
+        disabled={isSpinning}
+      >
+        <span className="banner-btn__title">BET</span>
+        <span className="banner-btn__ante-price">{fmt(currentBet * (anteEnabled ? 1.25 : 1))}</span>
+        {/* <span className="banner-btn__title">FREE SPINS</span> */}
+        <span className="banner-btn__ante-sub">Double chance<br/>to win the feature</span>
+        <span className={`banner-btn__ante-toggle${anteEnabled ? ' banner-btn__ante-toggle--on' : ''}`}>
+          <span className="banner-btn__ante-arrow">&#9654;</span>
+          <span className="banner-btn__ante-state">{anteEnabled ? 'ON' : 'OFF'}</span>
+        </span>
+      </button>
     </>
   );
 }

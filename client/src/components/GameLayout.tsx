@@ -8,19 +8,14 @@ interface GameLayoutProps {
   leftBanners: ReactNode;
   bottomBar: ReactNode;
   topBanner?: ReactNode;
+  onOrientationChange?: (isPortrait: boolean) => void;
 }
 
 const LANDSCAPE_W = 1920;
 const PORTRAIT_W  = 620;
 
-// Реальный размер PIXI canvas
 const CANVAS_W = 800;
 const CANVAS_H = 500;
-
-// Ширина canvas в portrait и производный scale
-const PORTRAIT_CANVAS_W = 360;
-const PORTRAIT_CANVAS_SCALE = PORTRAIT_CANVAS_W / CANVAS_W; // 0.45
-const PORTRAIT_CANVAS_H = Math.round(CANVAS_H * PORTRAIT_CANVAS_SCALE); // 225
 
 export default function GameLayout({
   gameBoard,
@@ -29,6 +24,7 @@ export default function GameLayout({
   leftBanners,
   bottomBar,
   topBanner,
+  onOrientationChange,
 }: GameLayoutProps) {
   const scalerRef        = useRef<HTMLDivElement>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
@@ -45,6 +41,7 @@ export default function GameLayout({
       const vh = window.innerHeight;
       const portrait = vh > vw;
       setIsPortrait(portrait);
+      onOrientationChange?.(portrait);
 
       const baseW = portrait ? PORTRAIT_W : LANDSCAPE_W;
       const scale = vw / baseW;
@@ -57,15 +54,20 @@ export default function GameLayout({
       scalerRef.current.style.width           = `${baseW}px`;
       scalerRef.current.style.height          = `${realH}px`;
 
-      // Scale PIXI canvas (800x500) to fill portrait-canvas-wrapper completely
+      // Canvas-скейлинг только для portrait
+      if (!portrait) {
+        if (canvasScalerRef.current) {
+          canvasScalerRef.current.style.transform = '';
+        }
+        return;
+      }
+
       requestAnimationFrame(() => {
         if (canvasWrapperRef.current && canvasScalerRef.current) {
           const wrapperW = canvasWrapperRef.current.clientWidth;
           const wrapperH = canvasWrapperRef.current.clientHeight;
-          const scaleX = wrapperW / 800;
-          const scaleY = wrapperH / 500;
-          // use min to contain (fit inside wrapper)
-          const s = Math.min(scaleX, scaleY);
+          if (!wrapperW || !wrapperH) return;
+          const s = Math.min(wrapperW / CANVAS_W, wrapperH / CANVAS_H);
           canvasScalerRef.current.style.transform = `scale(${s})`;
         }
       });
@@ -74,7 +76,7 @@ export default function GameLayout({
     scaleLayout();
     window.addEventListener('resize', scaleLayout);
     return () => window.removeEventListener('resize', scaleLayout);
-  }, []);
+  }, [onOrientationChange]);
 
   if (isPortrait) {
     return (
@@ -89,26 +91,35 @@ export default function GameLayout({
               </div>
             )}
 
-            {/* Canvas (масштабированный) + Banners справа */}
-            <div className="portrait-middle">
-              <div className="portrait-canvas-wrapper" ref={canvasWrapperRef}>
-                <div className="portrait-canvas-scaler" ref={canvasScalerRef}>
-                  {gameBoard}
-                </div>
-              </div>
-              <div className="portrait-banners">
-                {leftBanners}
-              </div>
-            </div>
+            {/* Центрирующая обёртка — занимает всё свободное пространство */}
+            <div className="portrait-content-area">
 
-            {/* Logo + Orders под canvas */}
-            <div className="portrait-bottom-content">
-              <div className="portrait-logo">
-                {logo}
-              </div>
-              <div className="portrait-orders">
-                <div className="orders-title"></div>
-                {orders}
+              {/* Внутренний блок — ограничен 60% высоты */}
+              <div className="portrait-content-inner">
+
+                {/* Canvas + Banners */}
+                <div className="portrait-middle">
+                  <div className="portrait-canvas-wrapper" ref={canvasWrapperRef}>
+                    <div className="portrait-canvas-scaler" ref={canvasScalerRef}>
+                      {gameBoard}
+                    </div>
+                  </div>
+                  <div className="portrait-banners">
+                    {leftBanners}
+                  </div>
+                </div>
+
+                {/* Logo + Orders */}
+                <div className="portrait-bottom-content">
+                  <div className="portrait-logo">
+                    {logo}
+                  </div>
+                  <div className="portrait-orders">
+                    <div className="orders-title"></div>
+                    {orders}
+                  </div>
+                </div>
+
               </div>
             </div>
 
